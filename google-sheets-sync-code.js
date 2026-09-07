@@ -465,9 +465,11 @@ function upsertLeadRow(sheet, leadId, rowValues) {
 
     if (match) {
       const rowPosition = i + 2;
-      // Preserve existing Created Date if the update payload has no date
-      if (!rowValues[0] && data[i][0]) {
-        rowValues[0] = data[i][0];
+      // Preserve existing cell values if the incoming update payload left them empty
+      for (let col = 0; col < CONFIG.HEADERS.length; col++) {
+        if ((rowValues[col] === "" || rowValues[col] === null || rowValues[col] === undefined) && data[i][col] !== "" && data[i][col] !== null && data[i][col] !== undefined) {
+          rowValues[col] = data[i][col];
+        }
       }
       // If row did not have Lead ID previously, ensure it is written now
       if (!rowValues[12] && cleanId) {

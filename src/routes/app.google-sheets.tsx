@@ -21,6 +21,8 @@ import {
   getGoogleSheetsWebhookUrl,
   isGoogleSheetsAutoSyncEnabled,
   setGoogleSheetsConfigInMemory,
+  persistGoogleSheetsConfig,
+  initGoogleSheetsConfig,
   GOOGLE_SHEETS_SHARED_STATE_KEY,
 } from "@/lib/google-sheets-sync";
 
@@ -416,8 +418,10 @@ function upsertLeadRow(sheet, leadId, rowValues) {
 
     if (match) {
       const rowPosition = i + 2;
-      if (!rowValues[0] && data[i][0]) {
-        rowValues[0] = data[i][0];
+      for (let col = 0; col < CONFIG.HEADERS.length; col++) {
+        if ((rowValues[col] === "" || rowValues[col] === null || rowValues[col] === undefined) && data[i][col] !== "" && data[i][col] !== null && data[i][col] !== undefined) {
+          rowValues[col] = data[i][col];
+        }
       }
       if (!rowValues[12] && cleanId) {
         rowValues[12] = cleanId;
@@ -513,52 +517,63 @@ function Dashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Load from Supabase shared_state if present
+  // Load and sync config on mount
   useEffect(() => {
-    supabase
-      .from("shared_state")
-      .select("value")
-      .eq("key", GOOGLE_SHEETS_SHARED_STATE_KEY)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.value && typeof data.value === "object") {
-          const cfg = data.value as { webhookUrl?: string; autoSync?: boolean };
-          if (cfg.webhookUrl) {
-            setWebhookUrl(cfg.webhookUrl);
-            setGoogleSheetsConfigInMemory(cfg.webhookUrl, cfg.autoSync);
-          }
-          if (cfg.autoSync !== undefined) {
-            setAutoSync(cfg.autoSync);
-          }
-        }
-      });
+    initGoogleSheetsConfig().then((url) => {
+      if (url) {
+        setWebhookUrl(url);
+        setIsConnected(true);
+      }
+    });
   }, []);
+
+  const handleUrlChange = (val: string) => {
+    setWebhookUrl(val);
+    const trimmed = val.trim();
+    if (trimmed.startsWith("https://script.google.com/macros/s/") && trimmed.includes("/exec")) {
+      void persistGoogleSheetsConfig(trimmed, autoSync);
+      setIsConnected(true);
+      localStorage.setItem("jellybean_google_sheets_connected", "true");
+    }
+  };
+
+  const handleAutoSyncToggle = async (checked: boolean) => {
+    setAutoSync(checked);
+    if (webhookUrl.trim()) {
+      await persistGoogleSheetsConfig(webhookUrl.trim(), checked);
+    }
+  };
 
   // Save settings locally and to Supabase shared_state
   const handleSaveSettings = async () => {
     const trimmed = webhookUrl.trim();
-    setGoogleSheetsConfigInMemory(trimmed, autoSync);
-    try {
-      await supabase.from("shared_state").upsert({
-        key: GOOGLE_SHEETS_SHARED_STATE_KEY,
-        value: { webhookUrl: trimmed, autoSync },
-        updated_at: new Date().toISOString(),
-      });
-    } catch (e) {
-      console.warn("Could not save to shared_state", e);
+    if (!trimmed) {
+      toast.error("Please enter a valid Google Apps Script Web App URL first.");
+      return;
     }
-    toast.success("Google Sheets sync settings saved and activated across all users!");
+    const res = await persistGoogleSheetsConfig(trimmed, autoSync);
+    setIsConnected(true);
+    localStorage.setItem("jellybean_google_sheets_connected", "true");
+    if (res.success) {
+      toast.success("Google Sheets live sync settings saved and activated across all CRM users!");
+    } else {
+      toast.info("Settings saved locally! (Notice: " + (res.error || "Database sync pending") + ")");
+    }
   };
 
   // Test connection
   const handleTestConnection = async () => {
-    if (!webhookUrl.trim()) {
+    const trimmed = webhookUrl.trim();
+    if (!trimmed) {
       toast.error("Please enter a valid Google Apps Script Web App URL first.");
       return;
     }
     setIsTesting(true);
     try {
-      await fetch(webhookUrl.trim(), {
+      // Auto-save configuration immediately so all subsequent edits sync automatically
+      await persistGoogleSheetsConfig(trimmed, autoSync);
+
+      await fetch(trimmed, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ type: "PING" }),
@@ -567,7 +582,7 @@ function Dashboard() {
 
       setIsConnected(true);
       localStorage.setItem("jellybean_google_sheets_connected", "true");
-      toast.success("Connected & Active! Webhook test ping dispatched.");
+      toast.success("Connected & Active! Webhook saved and live sync is running.");
     } catch (err) {
       console.error(err);
       toast.error("Failed to reach webhook URL. Make sure it is deployed as 'Anyone'.");
@@ -578,10 +593,14 @@ function Dashboard() {
 
   // Trigger bulk sync
   const handleSyncAllLeads = async () => {
-    if (!webhookUrl.trim()) {
+    const trimmed = webhookUrl.trim();
+    if (!trimmed) {
       toast.error("Please enter your Google Apps Script Web App URL before syncing.");
       return;
     }
+
+    // Auto-save configuration immediately so all subsequent edits sync automatically
+    await persistGoogleSheetsConfig(trimmed, autoSync);
 
     setIsSyncing(true);
     const toastId = toast.loading("Fetching all leads from Jellybean CRM...");
@@ -768,7 +787,10 @@ function Dashboard() {
                 type="text"
                 placeholder="https://script.google.com/macros/s/.../exec"
                 value={webhookUrl}
-                onChange={(e) => setWebhookUrl(e.target.value)}
+                onChange={(e) => handleUrlChange(e.target.value)}
+                onBlur={() => {
+                  if (webhookUrl.trim()) void persistGoogleSheetsConfig(webhookUrl.trim(), autoSync);
+                }}
                 className="font-mono text-xs bg-background/80 border-border flex-1"
               />
               <Button
@@ -791,7 +813,7 @@ function Dashboard() {
               <strong className="text-foreground">
                 Extensions &gt; Apps Script &gt; Deploy &gt; New deployment &gt; Web app
               </strong>
-              .
+              . Automatically saved across all sessions and CRM users.
             </p>
           </div>
 
@@ -801,7 +823,7 @@ function Dashboard() {
               <Switch
                 id="autoSyncToggle"
                 checked={autoSync}
-                onCheckedChange={setAutoSync}
+                onCheckedChange={handleAutoSyncToggle}
                 className="data-[state=checked]:bg-primary"
               />
               <div>
