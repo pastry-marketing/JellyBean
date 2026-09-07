@@ -600,6 +600,7 @@ function Inner() {
               .eq("id", lead.id);
 
             if (dbError) throw dbError;
+            void syncLeadToGoogleSheet("UPDATE", { ...lead, marketing_notes: result.rephrased });
             successCount++;
           }
         } catch (err) {
@@ -2276,6 +2277,7 @@ function LeadCard({
       toast.error(friendlyError(error));
       return false;
     }
+    void syncLeadToGoogleSheet("UPDATE", { ...lead, ...patch });
     return true;
   }
 
@@ -3555,6 +3557,7 @@ function LeadDrawer({
                             .delete()
                             .eq("id", lead.id);
                           if (error) throw error;
+                          void syncLeadToGoogleSheet("DELETE", lead);
                           await supabase.from("activity_logs").insert({
                             actor_id: auth.user?.id,
                             actor_name: auth.profile?.full_name,

@@ -6,11 +6,12 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const GOOGLE_SHEETS_SHARED_STATE_KEY = "google_sheets_sync_config";
 
-const DEFAULT_WEBHOOK_URL =
+export const DEFAULT_WEBHOOK_URL =
   "https://script.google.com/macros/s/AKfycbxCk4Vf4CN4-SfNe1Q2EX-oTHC2LRCGey6rXBrL11bIEKQA1kZAdx85PbxUGDwHR_N2/exec";
 
 let memoryWebhookUrl: string | null = null;
 let memoryAutoSync: boolean | null = null;
+let isConfigInitialized = false;
 
 export function getGoogleSheetsWebhookUrl(): string {
   if (memoryWebhookUrl && memoryWebhookUrl.trim()) {
@@ -55,7 +56,7 @@ export function setGoogleSheetsConfigInMemory(url?: string, autoSync?: boolean) 
   }
 }
 
-export async function initGoogleSheetsConfig() {
+export async function initGoogleSheetsConfig(): Promise<string | null> {
   try {
     const { data } = await supabase
       .from("shared_state")
@@ -63,15 +64,19 @@ export async function initGoogleSheetsConfig() {
       .eq("key", GOOGLE_SHEETS_SHARED_STATE_KEY)
       .maybeSingle();
 
+    isConfigInitialized = true;
+
     if (data?.value && typeof data.value === "object") {
       const cfg = data.value as { webhookUrl?: string; autoSync?: boolean };
-      if (cfg.webhookUrl) {
+      if (cfg.webhookUrl && cfg.webhookUrl.trim()) {
         setGoogleSheetsConfigInMemory(cfg.webhookUrl, cfg.autoSync);
+        return cfg.webhookUrl.trim();
       }
     }
   } catch (err) {
     console.warn("[GoogleSheetsSync] Config fetch notice:", err);
   }
+  return null;
 }
 
 let cachedProfilesMap: Map<string, string> | null = null;
@@ -113,6 +118,7 @@ export type LeadSyncPayload = {
   requirement_2?: string | null;
   post_text?: string | null;
   marketing_notes?: string | null;
+  compose?: string | null;
   assigned_to?: string | null;
   assigned_to_name?: string | null;
   created_at?: string | null;
@@ -122,16 +128,47 @@ export type LeadSyncPayload = {
   [key: string]: unknown;
 };
 
+// Dispatch deduplication to prevent flooding when multiple events fire for the same lead
+const recentlyDispatched = new Map<string, number>();
+
 export async function syncLeadToGoogleSheet(
   action: SyncAction,
   lead: LeadSyncPayload,
   customWebhookUrl?: string,
 ) {
+  if (!isGoogleSheetsAutoSyncEnabled()) {
+    console.log("[GoogleSheetsSync] Auto-sync disabled, skipping dispatch.");
+    return;
+  }
+
+  // Ensure config is loaded if not already
+  if (!isConfigInitialized && !memoryWebhookUrl) {
+    await initGoogleSheetsConfig();
+  }
+
   const webhookUrl = (customWebhookUrl || getGoogleSheetsWebhookUrl()).trim();
 
-  if (!webhookUrl || !isGoogleSheetsAutoSyncEnabled()) {
-    console.warn("[GoogleSheetsSync] Auto-sync skipped (no webhook URL or sync disabled)");
+  if (!webhookUrl) {
+    console.warn("[GoogleSheetsSync] Auto-sync skipped (no webhook URL configured)");
     return;
+  }
+
+  // Deduplicate rapid duplicate dispatches for the exact same lead state (e.g. from direct call + realtime event)
+  const dispatchKey = `${action}:${lead.id}:${lead.cs_status || ""}:${lead.marketing_notes || ""}:${lead.assigned_to || ""}:${lead.pinned_important ? 1 : 0}`;
+  const now = Date.now();
+  const lastTime = recentlyDispatched.get(dispatchKey);
+  if (lastTime && now - lastTime < 3500) {
+    console.log(`[GoogleSheetsSync] Duplicate dispatch suppressed for lead ${lead.id} (${action})`);
+    return;
+  }
+  recentlyDispatched.set(dispatchKey, now);
+
+  // Prune old entries
+  if (recentlyDispatched.size > 200) {
+    const cutoff = now - 10000;
+    for (const [k, v] of recentlyDispatched.entries()) {
+      if (v < cutoff) recentlyDispatched.delete(k);
+    }
   }
 
   try {
@@ -164,7 +201,7 @@ export async function syncLeadToGoogleSheet(
       mode: "no-cors",
     });
 
-    console.log(`[GoogleSheetsSync] ${action} event dispatched successfully.`);
+    console.log(`[GoogleSheetsSync] ${action} event dispatched successfully for lead ${lead.id}.`);
   } catch (err) {
     console.warn("[GoogleSheetsSync] Sync notice:", err);
   }
