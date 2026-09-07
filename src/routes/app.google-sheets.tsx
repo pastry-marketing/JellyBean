@@ -33,6 +33,8 @@ const APPS_SCRIPT_SOURCE = `/**
  * =========================================================================
  * JELLYBEAN CRM -> GOOGLE SHEETS LIVE SYNC SCRIPT
  * Target Spreadsheet: https://docs.google.com/spreadsheets/d/1JOW5XGEsDa-ewm7Xh4BIzru8_QU_z4MFFXTZ9ZvZodE/edit
+ * Release: v2.4 (Live Auto-Sync Engine - Auto-Save, In-Place Updates & Row Shift-Up on Delete)
+ * Updated: 2026-09-07
  * =========================================================================
  * 
  * EXACT COLUMNS STRUCTURE (13 Columns):
