@@ -17,6 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  getGoogleSheetsWebhookUrl,
+  isGoogleSheetsAutoSyncEnabled,
+  setGoogleSheetsConfigInMemory,
+  GOOGLE_SHEETS_SHARED_STATE_KEY,
+} from "@/lib/google-sheets-sync";
 
 const GOOGLE_SHEET_URL =
   "https://docs.google.com/spreadsheets/d/1JOW5XGEsDa-ewm7Xh4BIzru8_QU_z4MFFXTZ9ZvZodE/edit?gid=0#gid=0";
@@ -26,172 +32,352 @@ const APPS_SCRIPT_SOURCE = `/**
  * JELLYBEAN CRM -> GOOGLE SHEETS LIVE SYNC SCRIPT
  * Target Spreadsheet: https://docs.google.com/spreadsheets/d/1JOW5XGEsDa-ewm7Xh4BIzru8_QU_z4MFFXTZ9ZvZodE/edit
  * =========================================================================
+ * 
+ * EXACT COLUMNS STRUCTURE (13 Columns):
+ * 1.  Lead Created Date & Time (Column A - VERY FIRST)
+ * 2.  Customer Name            (Column B)
+ * 3.  Customer Phone No        (Column C)
+ * 4.  Area                     (Column D)
+ * 5.  Service                  (Column E)
+ * 6.  Status                   (Column F)
+ * 7.  Number Name              (Column G)
+ * 8.  Context                  (Column H)
+ * 9.  Exact Customer Requirement (Column I)
+ * 10. Compose                  (Column J)
+ * 11. Assigned To              (Column K - THIRD LAST COLUMN)
+ * 12. Important                (Column L - SECOND LAST COLUMN)
+ * 13. Lead ID                  (Column M - LAST COLUMN / Hidden / Tracking)
+ * 
+ * SHEETS:
+ * 1. "New to Contact"  -> ONLY leads with status "New to contact" WITHOUT Pinned Important
+ * 2. "Pinned Important"-> ONLY leads with status "New to contact" WITH Pinned Important
  */
+
 const CONFIG = {
   SHEET_NEW_TO_CONTACT: "New to Contact",
   SHEET_PINNED_IMPORTANT: "Pinned Important",
+  
   HEADERS: [
-    "Lead Created Date & Time", // Column A (First Column)
-    "Customer Name",            // Column B
-    "Customer Phone No",        // Column C
-    "Area",                     // Column D
-    "Service",                  // Column E
-    "Status",                   // Column F
-    "Number Name",              // Column G
-    "Context",                  // Column H
-    "Exact Customer Requirement",// Column I
-    "Compose",                  // Column J
-    "Assigned To",              // Column K
-    "Important",                // Column L
-    "Lead ID"                   // Column M (Reference for updates & deletes)
+    "Lead Created Date & Time",  // 1 (Column A - Very First)
+    "Customer Name",             // 2 (Column B)
+    "Customer Phone No",         // 3 (Column C)
+    "Area",                      // 4 (Column D)
+    "Service",                   // 5 (Column E)
+    "Status",                    // 6 (Column F)
+    "Number Name",               // 7 (Column G)
+    "Context",                   // 8 (Column H)
+    "Exact Customer Requirement",// 9 (Column I)
+    "Compose",                   // 10 (Column J)
+    "Assigned To",               // 11 (Column K - Third Last Column)
+    "Important",                 // 12 (Column L - Second Last Column)
+    "Lead ID"                    // 13 (Column M - Last Column)
   ]
 };
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu("⚡ Jellybean CRM")
-    .addItem("1. Format & Setup Sheets", "setupSheets")
+    .addItem("Format & Setup Sheets", "setupSheets")
+    .addItem("Check Webhook Status", "checkWebhookStatus")
     .addToUi();
+}
+
+function checkWebhookStatus() {
+  SpreadsheetApp.getUi().alert("Jellybean CRM Sync Script is active and ready for live sync.");
 }
 
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  [CONFIG.SHEET_NEW_TO_CONTACT, CONFIG.SHEET_PINNED_IMPORTANT].forEach((name, idx) => {
-    let sheet = ss.getSheetByName(name) || ss.insertSheet(name, idx);
+  const targetSheets = [CONFIG.SHEET_NEW_TO_CONTACT, CONFIG.SHEET_PINNED_IMPORTANT];
+
+  targetSheets.forEach((name, idx) => {
+    let sheet = ss.getSheetByName(name);
+    if (!sheet) {
+      sheet = ss.insertSheet(name, idx);
+    }
+    
     sheet.getRange(1, 1, 1, CONFIG.HEADERS.length).setValues([CONFIG.HEADERS]);
     const headerRange = sheet.getRange(1, 1, 1, CONFIG.HEADERS.length);
-    headerRange.setFontWeight("bold").setFontSize(10);
+    headerRange.setFontWeight("bold");
+    headerRange.setFontSize(10);
     headerRange.setBackground(name === CONFIG.SHEET_PINNED_IMPORTANT ? "#fee2e2" : "#e0e7ff");
-    headerRange.setFontColor("#0f172a").setVerticalAlignment("middle");
-    sheet.setRowHeight(1, 38).setFrozenRows(1);
-    sheet.setColumnWidth(1, 175).setColumnWidth(2, 180).setColumnWidth(3, 160)
-         .setColumnWidth(4, 140).setColumnWidth(5, 130).setColumnWidth(6, 130).setColumnWidth(7, 140)
-         .setColumnWidth(8, 220).setColumnWidth(9, 240).setColumnWidth(10, 220)
-         .setColumnWidth(11, 150).setColumnWidth(12, 130).setColumnWidth(13, 110);
+    headerRange.setFontColor("#0f172a");
+    headerRange.setVerticalAlignment("middle");
+    sheet.setRowHeight(1, 38);
+    sheet.setFrozenRows(1);
+    
+    sheet.setColumnWidth(1, 180);
+    sheet.setColumnWidth(2, 180);
+    sheet.setColumnWidth(3, 160);
+    sheet.setColumnWidth(4, 140);
+    sheet.setColumnWidth(5, 130);
+    sheet.setColumnWidth(6, 130);
+    sheet.setColumnWidth(7, 140);
+    sheet.setColumnWidth(8, 220);
+    sheet.setColumnWidth(9, 240);
+    sheet.setColumnWidth(10, 220);
+    sheet.setColumnWidth(11, 160);
+    sheet.setColumnWidth(12, 130);
+    sheet.setColumnWidth(13, 120);
   });
-  const def = ss.getSheetByName("Sheet1");
-  if (def && ss.getSheets().length > 1) { try { ss.deleteSheet(def); } catch(e){} }
-  SpreadsheetApp.getActiveSpreadsheet().toast("Sheets created and formatted!", "Jellybean CRM");
+
+  const defaultSheet = ss.getSheetByName("Sheet1");
+  if (defaultSheet && ss.getSheets().length > 1) {
+    try { ss.deleteSheet(defaultSheet); } catch (e) {}
+  }
+
+  SpreadsheetApp.getActiveSpreadsheet().toast("Sheets formatted! 13 columns configured successfully.", "Jellybean CRM");
+}
+
+function leadToRow(lead) {
+  let createdDate = lead.created_at || lead.assigned_at || "";
+  if (createdDate) {
+    try {
+      const d = new Date(createdDate);
+      if (!isNaN(d.getTime())) {
+        createdDate = Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+5", "yyyy-MM-dd HH:mm:ss");
+      }
+    } catch (e) {}
+  }
+
+  const phone = lead.customer_number_2 
+    ? (lead.customer_number || '') + ", " + lead.customer_number_2
+    : (lead.customer_number || '');
+    
+  const area = lead.main_area || lead.sub_area || lead.area || "";
+  const status = lead.cs_status === "new" ? "New to contact" : (lead.cs_status || "New to contact");
+  const exactRequirement = lead.requirement_1 || lead.requirement_2 || lead.post_text || lead.exact_requirement || lead.context || "";
+  const compose = lead.marketing_notes || lead.compose || "";
+  const assignedName = lead.assigned_to_name || (lead.assigned_to && !lead.assigned_to.includes("-") ? lead.assigned_to : "Unassigned");
+
+  let importantStatus = "No";
+  if (lead.pinned_important === true) {
+    importantStatus = "Pinned Important";
+  } else if (lead.is_important === true) {
+    importantStatus = "Important";
+  }
+
+  return [
+    createdDate,
+    lead.customer_name || "",
+    phone,
+    area,
+    lead.service || lead.pass_it_to || "",
+    status,
+    lead.number_name || "",
+    lead.context || "",
+    exactRequirement,
+    compose,
+    assignedName,
+    importantStatus,
+    lead.id || ""
+  ];
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    status: "active",
+    message: "Jellybean CRM Google Sheets Sync Engine is live!",
+    time: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
   try {
-    const payload = JSON.parse(e.postData.contents);
-    const eventType = payload.type || payload.action;
+    let payload = {};
+    if (e && e.postData && e.postData.contents) {
+      payload = JSON.parse(e.postData.contents);
+    } else if (e && e.parameter) {
+      payload = e.parameter;
+    }
+
+    const eventType = (payload.type || payload.action || "").toUpperCase();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const sheetNew = ss.getSheetByName(CONFIG.SHEET_NEW_TO_CONTACT) || ss.insertSheet(CONFIG.SHEET_NEW_TO_CONTACT);
     const sheetPinned = ss.getSheetByName(CONFIG.SHEET_PINNED_IMPORTANT) || ss.insertSheet(CONFIG.SHEET_PINNED_IMPORTANT);
 
     if (eventType === "PING") {
-      return jsonResponse({ status: "ok", message: "Connected to Google Sheets successfully!" });
+      return jsonResponse({
+        status: "ok",
+        message: "Connected to Google Sheets successfully! Ready for live sync.",
+        spreadsheet: ss.getName()
+      });
     }
 
     if (eventType === "BULK_SYNC") {
       setupSheets();
       const leads = payload.leads || [];
-      if (sheetNew.getLastRow() > 1) sheetNew.getRange(2, 1, sheetNew.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
-      if (sheetPinned.getLastRow() > 1) sheetPinned.getRange(2, 1, sheetPinned.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
+
+      if (sheetNew.getLastRow() > 1) {
+        sheetNew.getRange(2, 1, sheetNew.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
+      }
+      if (sheetPinned.getLastRow() > 1) {
+        sheetPinned.getRange(2, 1, sheetPinned.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
+      }
+
       const unpinnedNewRows = [];
       const pinnedRows = [];
+
       leads.forEach(l => {
-        const row = [
-          l.created_at || "", l.customer_name || "", l.customer_number || "", l.area || "", l.service || "",
-          "New to contact", l.number_name || "", l.context || "", l.exact_requirement || "",
-          l.marketing_notes || "", l.assigned_to_name || "Unassigned",
-          l.pinned_important ? "Pinned Important" : (l.is_important ? "Important" : "No"), l.id || ""
-        ];
+        const row = leadToRow(l);
         if (l.pinned_important === true) {
           pinnedRows.push(row);
         } else {
           unpinnedNewRows.push(row);
         }
       });
-      if (unpinnedNewRows.length > 0) sheetNew.getRange(2, 1, unpinnedNewRows.length, CONFIG.HEADERS.length).setValues(unpinnedNewRows);
-      if (pinnedRows.length > 0) sheetPinned.getRange(2, 1, pinnedRows.length, CONFIG.HEADERS.length).setValues(pinnedRows);
-      return jsonResponse({ status: "success", unpinnedCount: unpinnedNewRows.length, pinnedCount: pinnedRows.length });
+
+      if (unpinnedNewRows.length > 0) {
+        sheetNew.getRange(2, 1, unpinnedNewRows.length, CONFIG.HEADERS.length).setValues(unpinnedNewRows);
+      }
+      if (pinnedRows.length > 0) {
+        sheetPinned.getRange(2, 1, pinnedRows.length, CONFIG.HEADERS.length).setValues(pinnedRows);
+      }
+
+      return jsonResponse({
+        status: "success",
+        unpinnedCount: unpinnedNewRows.length,
+        pinnedCount: pinnedRows.length
+      });
     }
 
     const rec = payload.record || payload.lead || {};
     const oldRec = payload.old_record || payload.old_lead || {};
-    const leadId = rec.id || oldRec.id;
-    if (!leadId) return jsonResponse({ error: "Missing lead ID" }, 400);
+    const leadId = rec.id || oldRec.id || payload.leadId || "";
+    const phone = rec.customer_number || oldRec.customer_number || payload.customer_number || "";
+    const name = rec.customer_name || oldRec.customer_name || payload.customer_name || "";
+
+    if (!leadId && !phone && !name) {
+      return jsonResponse({ error: "Missing lead identifier (id, phone, or name)" }, 400);
+    }
 
     if (eventType === "DELETE") {
-      deleteLeadRow(sheetNew, leadId);
-      deleteLeadRow(sheetPinned, leadId);
-      return jsonResponse({ success: true, action: "DELETED", leadId });
+      const deletedFromNew = deleteLeadRow(sheetNew, leadId, phone, name);
+      const deletedFromPinned = deleteLeadRow(sheetPinned, leadId, phone, name);
+      return jsonResponse({
+        success: true,
+        action: "DELETED",
+        leadId: leadId,
+        rowsShifted: true,
+        deletedFromNew: deletedFromNew,
+        deletedFromPinned: deletedFromPinned
+      });
     }
 
-    if (eventType === "UPDATE") {
-      if (rec.cs_status !== "new") {
-        deleteLeadRow(sheetNew, leadId);
-        deleteLeadRow(sheetPinned, leadId);
-        return jsonResponse({ success: true, action: "REMOVED_STATUS_CHANGED" });
-      }
-      const row = [
-        rec.created_at || "", rec.customer_name || "", rec.customer_number || "", rec.area || "", rec.service || "",
-        "New to contact", rec.number_name || "", rec.context || "", rec.exact_requirement || "",
-        rec.marketing_notes || "", rec.assigned_to_name || "Unassigned",
-        rec.pinned_important ? "Pinned Important" : (rec.is_important ? "Important" : "No"), rec.id || ""
-      ];
-      if (rec.pinned_important === true) {
-        deleteLeadRow(sheetNew, leadId);
-        upsertLeadRow(sheetPinned, leadId, row);
-      } else {
-        deleteLeadRow(sheetPinned, leadId);
-        upsertLeadRow(sheetNew, leadId, row);
-      }
-      return jsonResponse({ success: true, action: "UPDATED" });
+    const status = (rec.cs_status || "").toLowerCase();
+    const isNewToContact = status === "new" || status === "new to contact";
+
+    if (!isNewToContact) {
+      deleteLeadRow(sheetNew, leadId, phone, name);
+      deleteLeadRow(sheetPinned, leadId, phone, name);
+      return jsonResponse({
+        success: true,
+        action: "REMOVED_STATUS_NOT_NEW",
+        status: rec.cs_status,
+        rowsShifted: true
+      });
     }
 
-    if (eventType === "INSERT") {
-      if (rec.cs_status !== "new") return jsonResponse({ message: "Ignored" });
-      const row = [
-        rec.created_at || "", rec.customer_name || "", rec.customer_number || "", rec.area || "", rec.service || "",
-        "New to contact", rec.number_name || "", rec.context || "", rec.exact_requirement || "",
-        rec.marketing_notes || "", rec.assigned_to_name || "Unassigned",
-        rec.pinned_important ? "Pinned Important" : (rec.is_important ? "Important" : "No"), rec.id || ""
-      ];
-      if (rec.pinned_important === true) {
-        insertLeadAtTop(sheetPinned, row);
+    const rowValues = leadToRow(rec);
+    const isPinned = (rec.pinned_important === true);
+
+    if (eventType === "UPDATE" || eventType === "INSERT") {
+      if (isPinned) {
+        deleteLeadRow(sheetNew, leadId, phone, name);
+        upsertLeadRow(sheetPinned, leadId, rowValues);
       } else {
-        insertLeadAtTop(sheetNew, row);
+        deleteLeadRow(sheetPinned, leadId, phone, name);
+        upsertLeadRow(sheetNew, leadId, rowValues);
       }
-      return jsonResponse({ success: true, action: "INSERTED" });
+      return jsonResponse({
+        success: true,
+        action: eventType,
+        sheet: isPinned ? CONFIG.SHEET_PINNED_IMPORTANT : CONFIG.SHEET_NEW_TO_CONTACT
+      });
     }
-    return jsonResponse({ message: "No action" });
-  } catch(e) {
-    return jsonResponse({ error: e.toString() }, 500);
+
+    return jsonResponse({ message: "No matching action handler for: " + eventType });
+  } catch (err) {
+    return jsonResponse({ error: err.toString() }, 500);
   }
 }
 
-function insertLeadAtTop(sheet, row) {
+function insertLeadAtTop(sheet, rowValues) {
   sheet.insertRowBefore(2);
-  sheet.getRange(2, 1, 1, row.length).setValues([row]);
+  sheet.getRange(2, 1, 1, rowValues.length).setValues([rowValues]);
+  sheet.setRowHeight(2, 32);
 }
 
-function upsertLeadRow(sheet, leadId, row) {
+function upsertLeadRow(sheet, leadId, rowValues) {
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) { insertLeadAtTop(sheet, row); return; }
-  const ids = sheet.getRange(2, 13, lastRow - 1, 1).getValues();
-  for (let i = 0; i < ids.length; i++) {
-    if (String(ids[i][0]) === String(leadId)) {
-      sheet.getRange(i + 2, 1, 1, row.length).setValues([row]);
+  if (lastRow < 2) {
+    insertLeadAtTop(sheet, rowValues);
+    return;
+  }
+
+  const cleanId = leadId ? String(leadId).trim().toLowerCase() : "";
+  const cleanPhone = rowValues[2] ? String(rowValues[2]).replace(/\D/g, "") : "";
+  const cleanName = rowValues[1] ? String(rowValues[1]).trim().toLowerCase() : "";
+
+  const data = sheet.getRange(2, 1, lastRow - 1, CONFIG.HEADERS.length).getValues();
+  for (let i = 0; i < data.length; i++) {
+    const rowId = String(data[i][12] || "").trim().toLowerCase();
+    const rowPhone = String(data[i][2] || "").replace(/\D/g, "");
+    const rowName = String(data[i][1] || "").trim().toLowerCase();
+
+    let match = false;
+    if (cleanId && rowId && rowId === cleanId) {
+      match = true;
+    } else if (!cleanId || !rowId) {
+      if (cleanPhone && cleanPhone.length >= 7 && rowPhone.includes(cleanPhone)) {
+        match = true;
+      } else if (cleanName && cleanName.length >= 3 && rowName === cleanName) {
+        match = true;
+      }
+    }
+
+    if (match) {
+      const rowPosition = i + 2;
+      sheet.getRange(rowPosition, 1, 1, rowValues.length).setValues([rowValues]);
       return;
     }
   }
-  insertLeadAtTop(sheet, row);
+
+  insertLeadAtTop(sheet, rowValues);
 }
 
-function deleteLeadRow(sheet, leadId) {
+function deleteLeadRow(sheet, leadId, fallbackPhone, fallbackName) {
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return;
-  const ids = sheet.getRange(2, 13, lastRow - 1, 1).getValues();
-  for (let i = 0; i < ids.length; i++) {
-    if (String(ids[i][0]) === String(leadId)) {
-      sheet.deleteRow(i + 2);
-      return;
+  if (lastRow < 2) return false;
+
+  const data = sheet.getRange(2, 1, lastRow - 1, CONFIG.HEADERS.length).getValues();
+  const cleanId = leadId ? String(leadId).trim().toLowerCase() : "";
+  const cleanPhone = fallbackPhone ? String(fallbackPhone).replace(/\D/g, "") : "";
+  const cleanName = fallbackName ? String(fallbackName).trim().toLowerCase() : "";
+
+  let deletedCount = 0;
+
+  for (let i = data.length - 1; i >= 0; i--) {
+    const rowId = String(data[i][12] || "").trim().toLowerCase();
+    const rowPhone = String(data[i][2] || "").replace(/\D/g, "");
+    const rowName = String(data[i][1] || "").trim().toLowerCase();
+
+    let match = false;
+    if (cleanId && rowId && rowId === cleanId) {
+      match = true;
+    } else if (cleanPhone && cleanPhone.length >= 7 && rowPhone.includes(cleanPhone)) {
+      match = true;
+    } else if (cleanName && cleanName.length >= 3 && rowName === cleanName) {
+      match = true;
+    }
+
+    if (match) {
+      const rowPosition = i + 2;
+      sheet.deleteRow(rowPosition);
+      deletedCount++;
     }
   }
+
+  return deletedCount > 0;
 }
 
 function jsonResponse(data, code) {
@@ -211,10 +397,14 @@ function Page() {
 
 function Dashboard() {
   const [webhookUrl, setWebhookUrl] = useState(() => {
-    return localStorage.getItem("jellybean_google_sheets_webhook") || "";
+    return (
+      localStorage.getItem("jellybean_google_sheets_webhook") ||
+      getGoogleSheetsWebhookUrl() ||
+      ""
+    );
   });
   const [autoSync, setAutoSync] = useState(() => {
-    return localStorage.getItem("jellybean_google_sheets_autosync") !== "false";
+    return isGoogleSheetsAutoSyncEnabled();
   });
   const [lastBulkSync, setLastBulkSync] = useState<string | null>(() => {
     return localStorage.getItem("jellybean_google_sheets_last_sync") || null;
@@ -230,11 +420,41 @@ function Dashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  // Save settings locally
-  const handleSaveSettings = () => {
-    localStorage.setItem("jellybean_google_sheets_webhook", webhookUrl.trim());
-    localStorage.setItem("jellybean_google_sheets_autosync", String(autoSync));
-    toast.success("Google Sheets sync settings saved successfully!");
+  // Load from Supabase shared_state if present
+  useEffect(() => {
+    supabase
+      .from("shared_state")
+      .select("value")
+      .eq("key", GOOGLE_SHEETS_SHARED_STATE_KEY)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.value && typeof data.value === "object") {
+          const cfg = data.value as { webhookUrl?: string; autoSync?: boolean };
+          if (cfg.webhookUrl) {
+            setWebhookUrl(cfg.webhookUrl);
+            setGoogleSheetsConfigInMemory(cfg.webhookUrl, cfg.autoSync);
+          }
+          if (cfg.autoSync !== undefined) {
+            setAutoSync(cfg.autoSync);
+          }
+        }
+      });
+  }, []);
+
+  // Save settings locally and to Supabase shared_state
+  const handleSaveSettings = async () => {
+    const trimmed = webhookUrl.trim();
+    setGoogleSheetsConfigInMemory(trimmed, autoSync);
+    try {
+      await supabase.from("shared_state").upsert({
+        key: GOOGLE_SHEETS_SHARED_STATE_KEY,
+        value: { webhookUrl: trimmed, autoSync },
+        updated_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn("Could not save to shared_state", e);
+    }
+    toast.success("Google Sheets sync settings saved and activated across all users!");
   };
 
   // Test connection

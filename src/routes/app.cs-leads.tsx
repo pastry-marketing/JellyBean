@@ -654,6 +654,14 @@ function Inner() {
         ? (teamById.get(nextAssignee)?.full_name ?? teamById.get(nextAssignee)?.email ?? "CS")
         : "Unassigned";
       toast.success(`Assigned ${ids.length} lead${ids.length === 1 ? "" : "s"} to ${assigneeName}`);
+      const updatedLeads = (list.data ?? []).filter((l) => selectedIds.has(l.id));
+      for (const l of updatedLeads) {
+        void syncLeadToGoogleSheet("UPDATE", {
+          ...l,
+          assigned_to: nextAssignee,
+          assigned_to_name: assigneeName,
+        });
+      }
       clearSelection();
       qc.invalidateQueries({ queryKey: ["cs_leads"] });
     } catch (e) {
@@ -2329,6 +2337,11 @@ function LeadCard({
         entity_id: lead.id,
         metadata: { assigned_to: next, assigned_to_name: nextName },
       });
+      void syncLeadToGoogleSheet("UPDATE", {
+        ...lead,
+        assigned_to: next,
+        assigned_to_name: nextName,
+      });
       toast.success(next ? `Assigned to ${nextName}` : "Unassigned");
       qc.invalidateQueries({ queryKey: ["cs_leads"] });
     } catch (e) {
@@ -3189,6 +3202,9 @@ function LeadDrawer({
         } as never)
         .eq("id", lead.id);
       if (error) throw error;
+      const assignedName = assignedTo
+        ? (teamById.get(assignedTo)?.full_name ?? teamById.get(assignedTo)?.email ?? "Staff")
+        : "Unassigned";
       void syncLeadToGoogleSheet("UPDATE", {
         ...lead,
         cs_status: status,
@@ -3197,6 +3213,7 @@ function LeadDrawer({
         requirement_1: requirement1.trim() || null,
         requirement_2: requirement2.trim() || null,
         assigned_to: assignedTo,
+        assigned_to_name: assignedName,
         is_important: isImportant,
         pinned_important: isImportant ? lead.pinned_important : false,
       });
