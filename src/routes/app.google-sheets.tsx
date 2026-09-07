@@ -221,7 +221,7 @@ function extractDigitsList(phoneStr) {
   if (!phoneStr) return [];
   return String(phoneStr)
     .split(/[,/|]/)
-    .map(function(p) { return p.replace(/\D/g, ""); })
+    .map(function(p) { return p.replace(/[^0-9]/g, ""); })
     .filter(function(p) { return p.length >= 7; });
 }
 
@@ -398,7 +398,7 @@ function upsertLeadRow(sheet, leadId, rowValues) {
   const data = sheet.getRange(2, 1, lastRow - 1, CONFIG.HEADERS.length).getValues();
   for (let i = 0; i < data.length; i++) {
     const rowId = String(data[i][12] || "").trim().toLowerCase();
-    const rowPhoneDigits = String(data[i][2] || "").replace(/\D/g, "");
+    const rowPhoneDigits = String(data[i][2] || "").replace(/[^0-9]/g, "");
     const rowName = String(data[i][1] || "").trim().toLowerCase();
 
     let match = false;
@@ -449,7 +449,7 @@ function deleteLeadRow(sheet, leadId, fallbackPhone, fallbackName) {
 
   for (let i = data.length - 1; i >= 0; i--) {
     const rowId = String(data[i][12] || "").trim().toLowerCase();
-    const rowPhoneDigits = String(data[i][2] || "").replace(/\D/g, "");
+    const rowPhoneDigits = String(data[i][2] || "").replace(/[^0-9]/g, "");
     const rowName = String(data[i][1] || "").trim().toLowerCase();
 
     let match = false;
@@ -497,9 +497,7 @@ function Page() {
 function Dashboard() {
   const [webhookUrl, setWebhookUrl] = useState(() => {
     return (
-      localStorage.getItem("jellybean_google_sheets_webhook") ||
-      getGoogleSheetsWebhookUrl() ||
-      ""
+      localStorage.getItem("jellybean_google_sheets_webhook") || getGoogleSheetsWebhookUrl() || ""
     );
   });
   const [autoSync, setAutoSync] = useState(() => {
@@ -559,7 +557,9 @@ function Dashboard() {
     if (res.success) {
       toast.success("Google Sheets live sync settings saved and activated across all CRM users!");
     } else {
-      toast.info("Settings saved locally! (Notice: " + (res.error || "Database sync pending") + ")");
+      toast.info(
+        "Settings saved locally! (Notice: " + (res.error || "Database sync pending") + ")",
+      );
     }
   };
 
@@ -791,7 +791,8 @@ function Dashboard() {
                 value={webhookUrl}
                 onChange={(e) => handleUrlChange(e.target.value)}
                 onBlur={() => {
-                  if (webhookUrl.trim()) void persistGoogleSheetsConfig(webhookUrl.trim(), autoSync);
+                  if (webhookUrl.trim())
+                    void persistGoogleSheetsConfig(webhookUrl.trim(), autoSync);
                 }}
                 className="font-mono text-xs bg-background/80 border-border flex-1"
               />
@@ -836,7 +837,8 @@ function Dashboard() {
                   Automatic Realtime Sync
                 </label>
                 <p className="text-xs text-muted-foreground">
-                  Instantly syncs lead creation, updates, status changes, and deletions to Google Sheets.
+                  Instantly syncs lead creation, updates, status changes, and deletions to Google
+                  Sheets.
                 </p>
               </div>
             </div>
@@ -881,7 +883,8 @@ function Dashboard() {
                   1-Minute Setup Guide for Google Sheets
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Copy this Apps Script into your Google Sheet to enable automated tab creation &amp; row shifting
+                  Copy this Apps Script into your Google Sheet to enable automated tab creation
+                  &amp; row shifting
                 </p>
               </div>
             </div>
@@ -933,7 +936,8 @@ function Dashboard() {
                 </span>
                 <h4 className="text-sm font-semibold text-foreground mb-1">Open Apps Script</h4>
                 <p className="text-xs text-muted-foreground">
-                  Click <strong className="text-foreground">Extensions &gt; Apps Script</strong> in Google Sheets menu.
+                  Click <strong className="text-foreground">Extensions &gt; Apps Script</strong> in
+                  Google Sheets menu.
                 </p>
               </div>
             </div>
@@ -946,7 +950,9 @@ function Dashboard() {
                 </span>
                 <h4 className="text-sm font-semibold text-foreground mb-1">Paste &amp; Save</h4>
                 <p className="text-xs text-muted-foreground">
-                  Click <strong className="text-foreground">Copy Apps Script Code</strong> above, paste into editor, and hit <strong className="text-foreground">Save (Ctrl+S)</strong>.
+                  Click <strong className="text-foreground">Copy Apps Script Code</strong> above,
+                  paste into editor, and hit{" "}
+                  <strong className="text-foreground">Save (Ctrl+S)</strong>.
                 </p>
               </div>
             </div>
@@ -959,7 +965,9 @@ function Dashboard() {
                 </span>
                 <h4 className="text-sm font-semibold text-foreground mb-1">Deploy as Web App</h4>
                 <p className="text-xs text-muted-foreground">
-                  Deploy &gt; New deployment &gt; Web app. Execute as: <strong className="text-foreground">Me</strong>, Access: <strong className="text-foreground">Anyone</strong>. Paste URL here!
+                  Deploy &gt; New deployment &gt; Web app. Execute as:{" "}
+                  <strong className="text-foreground">Me</strong>, Access:{" "}
+                  <strong className="text-foreground">Anyone</strong>. Paste URL here!
                 </p>
               </div>
             </div>
@@ -975,28 +983,37 @@ function Dashboard() {
               <div className="flex items-start gap-2 text-foreground/90">
                 <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-foreground">First Column: Lead Created Date &amp; Time:</strong> Automatically placed as Column A for instant timeline filtering.
+                  <strong className="text-foreground">
+                    First Column: Lead Created Date &amp; Time:
+                  </strong>{" "}
+                  Automatically placed as Column A for instant timeline filtering.
                 </div>
               </div>
 
               <div className="flex items-start gap-2 text-foreground/90">
                 <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-foreground">Recent Leads on Top:</strong> Reverse chronological order with recent leads always inserted on Row 2 directly below the header.
+                  <strong className="text-foreground">Recent Leads on Top:</strong> Reverse
+                  chronological order with recent leads always inserted on Row 2 directly below the
+                  header.
                 </div>
               </div>
 
               <div className="flex items-start gap-2 text-foreground/90">
                 <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-foreground">New to Contact (Unpinned Only):</strong> Tab strictly holds leads where status is &ldquo;New to contact&rdquo; and NOT marked as Pinned Important.
+                  <strong className="text-foreground">New to Contact (Unpinned Only):</strong> Tab
+                  strictly holds leads where status is &ldquo;New to contact&rdquo; and NOT marked
+                  as Pinned Important.
                 </div>
               </div>
 
               <div className="flex items-start gap-2 text-foreground/90">
                 <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
                 <div>
-                  <strong className="text-foreground">Pinned Important Leads Sheet:</strong> Dedicated tab for &ldquo;New to contact&rdquo; leads that ARE pinned. Pinning a lead moves it here; unpinning moves it back to New to Contact automatically!
+                  <strong className="text-foreground">Pinned Important Leads Sheet:</strong>{" "}
+                  Dedicated tab for &ldquo;New to contact&rdquo; leads that ARE pinned. Pinning a
+                  lead moves it here; unpinning moves it back to New to Contact automatically!
                 </div>
               </div>
             </div>

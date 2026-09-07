@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { Eye, EyeOff, KeyRound, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Database } from "@/integrations/supabase/types";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, supabaseUrl, supabaseKey } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -43,7 +43,7 @@ export function ChangePasswordDialog({ open, onOpenChange, userEmail }: Props) {
 
   const verifyClient = useMemo(
     () =>
-      createClient<Database>(supabase.supabaseUrl, supabase.supabaseKey, {
+      createClient<Database>(supabaseUrl, supabaseKey, {
         auth: {
           persistSession: false,
           autoRefreshToken: false,
@@ -166,7 +166,6 @@ export function ChangePasswordDialog({ open, onOpenChange, userEmail }: Props) {
             </DialogHeader>
           </div>
 
-
           <div className="space-y-4 px-6 py-5">
             <PasswordField
               id="current-password"
@@ -199,7 +198,12 @@ export function ChangePasswordDialog({ open, onOpenChange, userEmail }: Props) {
           </div>
 
           <DialogFooter className="border-t border-border bg-muted/30 px-6 py-4 sm:justify-between sm:space-x-0">
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={saving}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => handleOpenChange(false)}
+              disabled={saving}
+            >
               Cancel
             </Button>
             <Button type="submit" disabled={saving}>

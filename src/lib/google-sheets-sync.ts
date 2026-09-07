@@ -69,15 +69,18 @@ export async function persistGoogleSheetsConfig(
   const cleanUrl = url.trim();
   setGoogleSheetsConfigInMemory(cleanUrl, autoSync);
 
-  let anySuccess = true;
+  const anySuccess = true;
   let lastError = "";
 
   // 1. Try Supabase RPC function (runs with SECURITY DEFINER to bypass client RLS)
   try {
-    const { error: rpcErr } = await supabase.rpc("save_google_sheets_config" as never, {
-      p_webhook_url: cleanUrl,
-      p_auto_sync: autoSync,
-    } as never);
+    const { error: rpcErr } = await supabase.rpc(
+      "save_google_sheets_config" as never,
+      {
+        p_webhook_url: cleanUrl,
+        p_auto_sync: autoSync,
+      } as never,
+    );
     if (!rpcErr) {
       return { success: true };
     }
@@ -254,7 +257,10 @@ export async function syncLeadToGoogleSheet(
       timestamp: new Date().toISOString(),
     };
 
-    console.log(`[GoogleSheetsSync] Dispatching ${action} for lead ${lead.id} (${lead.customer_name || "Unknown"}):`, payload);
+    console.log(
+      `[GoogleSheetsSync] Dispatching ${action} for lead ${lead.id} (${lead.customer_name || "Unknown"}):`,
+      payload,
+    );
 
     // Record deduplication mark
     recentlyDispatched.set(dispatchKey, now);
