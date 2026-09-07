@@ -2,7 +2,7 @@
  * =========================================================================
  * JELLYBEAN CRM -> GOOGLE SHEETS LIVE SYNC SCRIPT
  * Target Spreadsheet: https://docs.google.com/spreadsheets/d/1JOW5XGEsDa-ewm7Xh4BIzru8_QU_z4MFFXTZ9ZvZodE/edit
- * Release: v2.5 (Unlimited Leads Bulk Sync & Dynamic Sheet Capacity)
+ * Release: v2.6 (Strict "New to Contact" Pipeline Engine)
  * Updated: 2026-09-07
  * =========================================================================
  * 
@@ -22,16 +22,18 @@
  * 13. Lead ID                  (Column M - LAST COLUMN / Tracking UUID)
  * 
  * TABS / SHEETS:
- * 1. "New to Contact"   -> All leads without Pinned Important
- * 2. "Pinned Important" -> All leads with Pinned Important
+ * 1. "New to Contact"   -> All leads with status "New to contact" WITHOUT Pinned Important
+ * 2. "Pinned Important" -> All leads with status "New to contact" WITH Pinned Important
  * 
  * SYNC BEHAVIOR:
- * - ADD (INSERT): Placed at Row 2 (directly below headers), shifting existing rows down.
- * - EDIT (UPDATE): Updates the row in place across all 13 columns. Any status change
- *   (e.g., Contacted, Follow Up, Quoted, Booked, Lost, Won) updates Column F without deleting the row.
- *   Toggling Pinned Important moves the row automatically between the two tabs.
- * - DELETE: Removes the row completely (via sheet.deleteRow), and all rows below it automatically
- *   move up to fill the empty space without leaving any blank lines.
+ * - ONLY "New to contact" leads belong on these Google Sheets.
+ * - ADD (INSERT): If status is "New to contact", added to Row 2 of the appropriate tab.
+ * - EDIT / STATUS CHANGE (UPDATE):
+ *     * If a lead's status is changed away from "New to contact" (e.g. Contacted, Quoted, Booked, Lost, etc.),
+ *       it is IMMEDIATELY REMOVED from the Google Sheet, and the rows below it automatically shift UP!
+ *     * If a lead remains "New to contact", its row is updated in place with any edited details.
+ *     * Toggling Pinned Important moves the lead seamlessly between the two tabs.
+ * - DELETE: Removes the row completely (via sheet.deleteRow), shifting all rows below it UP.
  */
 
 const CONFIG = {
@@ -162,6 +164,15 @@ function formatStatus(rawStatus) {
   if (s === "pending") return "Pending";
   if (s === "archive" || s === "archived") return "Archived";
   return rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1);
+}
+
+/**
+ * Validates whether a lead has "New to contact" status
+ */
+function isNewToContact(rawStatus) {
+  if (!rawStatus) return true;
+  const s = String(rawStatus).trim().toLowerCase();
+  return s === "new" || s === "new to contact" || s === "new_to_contact";
 }
 
 /**
@@ -320,6 +331,8 @@ function doPost(e) {
       const pinnedRows = [];
 
       leads.forEach(function(l) {
+        // Strictly only process "New to contact" leads
+        if (!isNewToContact(l.cs_status)) return;
         const row = leadToRow(l);
         if (l.pinned_important === true) {
           pinnedRows.push(row);
@@ -378,19 +391,37 @@ function doPost(e) {
     }
 
     // ── 4. INSERT / UPDATE ACTION ──
-    // Supports editing any lead field or status. The row remains in the sheet
-    // and updates Column F ("Status") as well as all other changed columns.
+    // Sheets ONLY maintain "New to contact" leads.
+    // If a lead changes status to anything else (e.g. Contacted, Quoted, Booked, Lost),
+    // it is automatically removed from the sheets, shifting subsequent rows UP!
     const rowValues = leadToRow(rec);
     const isPinned = (rec.pinned_important === true);
+    const isNew = isNewToContact(rec.cs_status);
 
     if (eventType === "UPDATE" || eventType === "INSERT") {
+      // If lead is no longer "New to contact", remove from both sheets
+      if (!isNew) {
+        const deletedFromNew = deleteLeadRow(sheetNew, leadId, phone, name);
+        const deletedFromPinned = deleteLeadRow(sheetPinned, leadId, phone, name);
+        return jsonResponse({
+          success: true,
+          action: "REMOVED_STATUS_CHANGED",
+          status: rec.cs_status,
+          leadId: leadId,
+          rowsShifted: true,
+          deletedFromNew: deletedFromNew,
+          deletedFromPinned: deletedFromPinned
+        });
+      }
+
+      // If lead is "New to contact":
       if (isPinned) {
         // Remove from unpinned sheet if it was previously there
         deleteLeadRow(sheetNew, leadId, phone, name);
         // Upsert into pinned sheet
         upsertLeadRow(sheetPinned, leadId, rowValues);
       } else {
-        // Remove from pinned sheet if it was previously unpinned
+        // Remove from pinned sheet if it was previously pinned
         deleteLeadRow(sheetPinned, leadId, phone, name);
         // Upsert into unpinned sheet
         upsertLeadRow(sheetNew, leadId, rowValues);

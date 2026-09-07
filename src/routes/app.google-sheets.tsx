@@ -33,7 +33,7 @@ const APPS_SCRIPT_SOURCE = `/**
  * =========================================================================
  * JELLYBEAN CRM -> GOOGLE SHEETS LIVE SYNC SCRIPT
  * Target Spreadsheet: https://docs.google.com/spreadsheets/d/1JOW5XGEsDa-ewm7Xh4BIzru8_QU_z4MFFXTZ9ZvZodE/edit
- * Release: v2.5 (Unlimited Leads Bulk Sync & Dynamic Sheet Capacity)
+ * Release: v2.6 (Strict "New to Contact" Pipeline Engine)
  * Updated: 2026-09-07
  * =========================================================================
  * 
@@ -44,6 +44,7 @@ const APPS_SCRIPT_SOURCE = `/**
  * 4.  Area                     (Column D)
  * 5.  Service                  (Column E)
  * 6.  Status                   (Column F)
+ * 7.  Number Name              (Column G)
  * 8.  Context                  (Column H)
  * 9.  Exact Customer Requirement (Column I)
  * 10. Compose                  (Column J)
@@ -52,16 +53,18 @@ const APPS_SCRIPT_SOURCE = `/**
  * 13. Lead ID                  (Column M - LAST COLUMN / Tracking UUID)
  * 
  * TABS / SHEETS:
- * 1. "New to Contact"   -> All leads without Pinned Important
- * 2. "Pinned Important" -> All leads with Pinned Important
+ * 1. "New to Contact"   -> All leads with status "New to contact" WITHOUT Pinned Important
+ * 2. "Pinned Important" -> All leads with status "New to contact" WITH Pinned Important
  * 
  * SYNC BEHAVIOR:
- * - ADD (INSERT): Placed at Row 2 (directly below headers), shifting existing rows down.
- * - EDIT (UPDATE): Updates the row in place across all 13 columns. Any status change
- *   (e.g., Contacted, Follow Up, Quoted, Booked, Lost, Won) updates Column F without deleting the row.
- *   Toggling Pinned Important moves the row automatically between the two tabs.
- * - DELETE: Removes the row completely (via sheet.deleteRow), and all rows below it automatically
- *   move up to fill the empty space without leaving any blank lines.
+ * - ONLY "New to contact" leads belong on these Google Sheets.
+ * - ADD (INSERT): If status is "New to contact", added to Row 2 of the appropriate tab.
+ * - EDIT / STATUS CHANGE (UPDATE):
+ *     * If a lead's status is changed away from "New to contact" (e.g. Contacted, Quoted, Booked, Lost, etc.),
+ *       it is IMMEDIATELY REMOVED from the Google Sheet, and the rows below it automatically shift UP!
+ *     * If a lead remains "New to contact", its row is updated in place with any edited details.
+ *     * Toggling Pinned Important moves the lead seamlessly between the two tabs.
+ * - DELETE: Removes the row completely (via sheet.deleteRow), shifting all rows below it UP.
  */
 
 const CONFIG = {
@@ -170,6 +173,12 @@ function formatStatus(rawStatus) {
   if (s === "pending") return "Pending";
   if (s === "archive" || s === "archived") return "Archived";
   return rawStatus.charAt(0).toUpperCase() + rawStatus.slice(1);
+}
+
+function isNewToContact(rawStatus) {
+  if (!rawStatus) return true;
+  const s = String(rawStatus).trim().toLowerCase();
+  return s === "new" || s === "new to contact" || s === "new_to_contact";
 }
 
 function leadToRow(lead) {
@@ -299,6 +308,7 @@ function doPost(e) {
       const pinnedRows = [];
 
       leads.forEach(function(l) {
+        if (!isNewToContact(l.cs_status)) return;
         const row = leadToRow(l);
         if (l.pinned_important === true) {
           pinnedRows.push(row);
@@ -354,8 +364,23 @@ function doPost(e) {
 
     const rowValues = leadToRow(rec);
     const isPinned = (rec.pinned_important === true);
+    const isNew = isNewToContact(rec.cs_status);
 
     if (eventType === "UPDATE" || eventType === "INSERT") {
+      if (!isNew) {
+        const deletedFromNew = deleteLeadRow(sheetNew, leadId, phone, name);
+        const deletedFromPinned = deleteLeadRow(sheetPinned, leadId, phone, name);
+        return jsonResponse({
+          success: true,
+          action: "REMOVED_STATUS_CHANGED",
+          status: rec.cs_status,
+          leadId: leadId,
+          rowsShifted: true,
+          deletedFromNew: deletedFromNew,
+          deletedFromPinned: deletedFromPinned
+        });
+      }
+
       if (isPinned) {
         deleteLeadRow(sheetNew, leadId, phone, name);
         upsertLeadRow(sheetPinned, leadId, rowValues);
@@ -689,8 +714,15 @@ function Dashboard() {
         }
       }
 
-      if (allLeads.length === 0) {
-        toast.info("No leads found to sync.", { id: toastId });
+      // Filter strictly for "New to contact" leads
+      const newToContactLeads = allLeads.filter((l) => {
+        if (!l.cs_status) return true;
+        const s = l.cs_status.trim().toLowerCase();
+        return s === "new" || s === "new to contact" || s === "new_to_contact";
+      });
+
+      if (newToContactLeads.length === 0) {
+        toast.info("No 'New to contact' leads found to sync.", { id: toastId });
         setIsSyncing(false);
         return;
       }
@@ -705,7 +737,7 @@ function Dashboard() {
       });
 
       // 3. Map leads with Date & Time as first attribute and include cs_status
-      const mappedLeads = allLeads.map((l) => ({
+      const mappedLeads = newToContactLeads.map((l) => ({
         id: l.id,
         created_at: l.created_at ? new Date(l.created_at).toLocaleString() : "",
         customer_name: l.customer_name || "",
@@ -767,7 +799,7 @@ function Dashboard() {
       localStorage.setItem("jellybean_google_sheets_connected", "true");
 
       toast.success(
-        `Successfully synced all ${mappedLeads.length} leads (${unpinnedCount} unpinned + ${pinnedCount} pinned)!`,
+        `Successfully synced ${mappedLeads.length} "New to contact" leads (${unpinnedCount} unpinned + ${pinnedCount} pinned)!`,
         { id: toastId },
       );
     } catch (err) {
