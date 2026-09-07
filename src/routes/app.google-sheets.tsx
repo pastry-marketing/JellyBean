@@ -33,7 +33,7 @@ const APPS_SCRIPT_SOURCE = `/**
  * =========================================================================
  * JELLYBEAN CRM -> GOOGLE SHEETS LIVE SYNC SCRIPT
  * Target Spreadsheet: https://docs.google.com/spreadsheets/d/1JOW5XGEsDa-ewm7Xh4BIzru8_QU_z4MFFXTZ9ZvZodE/edit
- * Release: v2.4 (Live Auto-Sync Engine - Auto-Save, In-Place Updates & Row Shift-Up on Delete)
+ * Release: v2.5 (Unlimited Leads Bulk Sync & Dynamic Sheet Capacity)
  * Updated: 2026-09-07
  * =========================================================================
  * 
@@ -275,15 +275,24 @@ function doPost(e) {
       });
     }
 
-    if (eventType === "BULK_SYNC") {
+    // ── 2. BULK SYNC / BATCH SYNC ──
+    if (eventType === "BULK_SYNC" || eventType === "BATCH_SYNC") {
       setupSheets();
       const leads = payload.leads || [];
+      const isChunked = (payload.total_chunks && payload.total_chunks > 1);
+      const isFirstChunk = (!isChunked || payload.chunk_index === 0 || payload.is_first_chunk === true);
 
-      if (sheetNew.getLastRow() > 1) {
-        sheetNew.getRange(2, 1, sheetNew.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
-      }
-      if (sheetPinned.getLastRow() > 1) {
-        sheetPinned.getRange(2, 1, sheetPinned.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
+      // Only clear existing data rows on the first chunk or single full sync
+      if (isFirstChunk) {
+        const lastNew = sheetNew.getLastRow();
+        if (lastNew > 1) {
+          sheetNew.getRange(2, 1, lastNew - 1, CONFIG.HEADERS.length).clearContent();
+        }
+        const lastPinned = sheetPinned.getLastRow();
+        if (lastPinned > 1) {
+          sheetPinned.getRange(2, 1, lastPinned - 1, CONFIG.HEADERS.length).clearContent();
+        }
+        SpreadsheetApp.flush();
       }
 
       const unpinnedNewRows = [];
@@ -299,14 +308,22 @@ function doPost(e) {
       });
 
       if (unpinnedNewRows.length > 0) {
-        sheetNew.getRange(2, 1, unpinnedNewRows.length, CONFIG.HEADERS.length).setValues(unpinnedNewRows);
+        const startRow = sheetNew.getLastRow() + 1;
+        ensureCapacity(sheetNew, startRow + unpinnedNewRows.length);
+        sheetNew.getRange(startRow, 1, unpinnedNewRows.length, CONFIG.HEADERS.length).setValues(unpinnedNewRows);
       }
       if (pinnedRows.length > 0) {
-        sheetPinned.getRange(2, 1, pinnedRows.length, CONFIG.HEADERS.length).setValues(pinnedRows);
+        const startRow = sheetPinned.getLastRow() + 1;
+        ensureCapacity(sheetPinned, startRow + pinnedRows.length);
+        sheetPinned.getRange(startRow, 1, pinnedRows.length, CONFIG.HEADERS.length).setValues(pinnedRows);
       }
+
+      SpreadsheetApp.flush();
 
       return jsonResponse({
         status: "success",
+        chunkIndex: payload.chunk_index || 0,
+        totalChunks: payload.total_chunks || 1,
         unpinnedCount: unpinnedNewRows.length,
         pinnedCount: pinnedRows.length
       });
@@ -360,6 +377,13 @@ function doPost(e) {
     return jsonResponse({ error: err.toString(), stack: err.stack }, 500);
   } finally {
     lock.releaseLock();
+  }
+}
+
+function ensureCapacity(sheet, requiredRows) {
+  const currentMax = sheet.getMaxRows();
+  if (currentMax < requiredRows) {
+    sheet.insertRowsAfter(currentMax, requiredRows - currentMax);
   }
 }
 
@@ -608,15 +632,68 @@ function Dashboard() {
     const toastId = toast.loading("Fetching all leads from Jellybean CRM...");
 
     try {
-      // 1. Fetch all qualified leads
-      const { data: leads, error } = await supabase
-        .from("qualified_leads")
-        .select(
-          "id, customer_name, customer_number, customer_number_2, main_area, sub_area, service, cs_status, number_name, context, requirement_1, requirement_2, post_text, marketing_notes, assigned_to, created_at, pinned_important, is_important",
-        )
-        .order("created_at", { ascending: false });
+      // 1. Fetch ALL qualified leads by paginating past PostgREST 1000-row limit
+      const allLeads: Array<{
+        id: string;
+        customer_name: string | null;
+        customer_number: string | null;
+        customer_number_2: string | null;
+        main_area: string | null;
+        sub_area: string | null;
+        service: string | null;
+        cs_status: string | null;
+        number_name: string | null;
+        context: string | null;
+        requirement_1: string | null;
+        requirement_2: string | null;
+        post_text: string | null;
+        marketing_notes: string | null;
+        assigned_to: string | null;
+        created_at: string | null;
+        pinned_important: boolean | null;
+        is_important: boolean | null;
+      }> = [];
 
-      if (error) throw error;
+      const PAGE_SIZE = 1000;
+      let pageIndex = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const from = pageIndex * PAGE_SIZE;
+        const to = from + PAGE_SIZE - 1;
+
+        toast.loading(
+          `Fetching all leads from Jellybean CRM... (${allLeads.length} leads loaded)`,
+          { id: toastId },
+        );
+
+        const { data: pageData, error: pageError } = await supabase
+          .from("qualified_leads")
+          .select(
+            "id, customer_name, customer_number, customer_number_2, main_area, sub_area, service, cs_status, number_name, context, requirement_1, requirement_2, post_text, marketing_notes, assigned_to, created_at, pinned_important, is_important",
+          )
+          .order("created_at", { ascending: false })
+          .range(from, to);
+
+        if (pageError) throw pageError;
+
+        if (pageData && pageData.length > 0) {
+          allLeads.push(...pageData);
+          if (pageData.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            pageIndex++;
+          }
+        } else {
+          hasMore = false;
+        }
+      }
+
+      if (allLeads.length === 0) {
+        toast.info("No leads found to sync.", { id: toastId });
+        setIsSyncing(false);
+        return;
+      }
 
       // 2. Fetch profiles to resolve assigned_to names
       const { data: profiles } = await supabase
@@ -628,7 +705,7 @@ function Dashboard() {
       });
 
       // 3. Map leads with Date & Time as first attribute and include cs_status
-      const mappedLeads = (leads || []).map((l) => ({
+      const mappedLeads = allLeads.map((l) => ({
         id: l.id,
         created_at: l.created_at ? new Date(l.created_at).toLocaleString() : "",
         customer_name: l.customer_name || "",
@@ -650,21 +727,35 @@ function Dashboard() {
       const unpinnedCount = mappedLeads.filter((l) => !l.pinned_important).length;
       const pinnedCount = mappedLeads.filter((l) => l.pinned_important).length;
 
-      toast.loading(
-        `Pushing ${unpinnedCount} unpinned and ${pinnedCount} pinned leads to Google Sheets...`,
-        { id: toastId },
-      );
+      // 4. Send leads to Google Apps Script in batches of 1,000 for maximum reliability
+      const BATCH_SIZE = 1000;
+      const totalBatches = Math.ceil(mappedLeads.length / BATCH_SIZE);
 
-      // 4. Send to Google Apps Script
-      await fetch(webhookUrl.trim(), {
-        method: "POST",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify({
-          type: "BULK_SYNC",
-          leads: mappedLeads,
-        }),
-        mode: "no-cors",
-      });
+      for (let b = 0; b < totalBatches; b++) {
+        const chunk = mappedLeads.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+        toast.loading(
+          `Syncing leads to Google Sheets (Batch ${b + 1} of ${totalBatches} - ${chunk.length} leads)...`,
+          { id: toastId },
+        );
+
+        await fetch(trimmed, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({
+            type: "BULK_SYNC",
+            is_first_chunk: b === 0,
+            chunk_index: b,
+            total_chunks: totalBatches,
+            leads: chunk,
+          }),
+          mode: "no-cors",
+        });
+
+        if (b < totalBatches - 1) {
+          // Brief pause between chunks to let Google Apps Script flush
+          await new Promise((r) => setTimeout(r, 400));
+        }
+      }
 
       const nowStr = new Date().toLocaleString();
       setLastBulkSync(nowStr);
@@ -676,7 +767,7 @@ function Dashboard() {
       localStorage.setItem("jellybean_google_sheets_connected", "true");
 
       toast.success(
-        `Successfully synced ${unpinnedCount} unpinned leads and ${pinnedCount} pinned leads!`,
+        `Successfully synced all ${mappedLeads.length} leads (${unpinnedCount} unpinned + ${pinnedCount} pinned)!`,
         { id: toastId },
       );
     } catch (err) {

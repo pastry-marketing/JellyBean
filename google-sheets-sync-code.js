@@ -2,7 +2,7 @@
  * =========================================================================
  * JELLYBEAN CRM -> GOOGLE SHEETS LIVE SYNC SCRIPT
  * Target Spreadsheet: https://docs.google.com/spreadsheets/d/1JOW5XGEsDa-ewm7Xh4BIzru8_QU_z4MFFXTZ9ZvZodE/edit
- * Release: v2.4 (Live Auto-Sync Engine - Auto-Save, In-Place Updates & Row Shift-Up on Delete)
+ * Release: v2.5 (Unlimited Leads Bulk Sync & Dynamic Sheet Capacity)
  * Updated: 2026-09-07
  * =========================================================================
  * 
@@ -296,17 +296,24 @@ function doPost(e) {
       });
     }
 
-    // ── 2. BULK SYNC ──
-    if (eventType === "BULK_SYNC") {
+    // ── 2. BULK SYNC / BATCH SYNC ──
+    if (eventType === "BULK_SYNC" || eventType === "BATCH_SYNC") {
       setupSheets();
       const leads = payload.leads || [];
+      const isChunked = (payload.total_chunks && payload.total_chunks > 1);
+      const isFirstChunk = (!isChunked || payload.chunk_index === 0 || payload.is_first_chunk === true);
 
-      // Clear existing data rows
-      if (sheetNew.getLastRow() > 1) {
-        sheetNew.getRange(2, 1, sheetNew.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
-      }
-      if (sheetPinned.getLastRow() > 1) {
-        sheetPinned.getRange(2, 1, sheetPinned.getLastRow() - 1, CONFIG.HEADERS.length).clearContent();
+      // Only clear existing data rows on the first chunk or single full sync
+      if (isFirstChunk) {
+        const lastNew = sheetNew.getLastRow();
+        if (lastNew > 1) {
+          sheetNew.getRange(2, 1, lastNew - 1, CONFIG.HEADERS.length).clearContent();
+        }
+        const lastPinned = sheetPinned.getLastRow();
+        if (lastPinned > 1) {
+          sheetPinned.getRange(2, 1, lastPinned - 1, CONFIG.HEADERS.length).clearContent();
+        }
+        SpreadsheetApp.flush();
       }
 
       const unpinnedNewRows = [];
@@ -322,14 +329,22 @@ function doPost(e) {
       });
 
       if (unpinnedNewRows.length > 0) {
-        sheetNew.getRange(2, 1, unpinnedNewRows.length, CONFIG.HEADERS.length).setValues(unpinnedNewRows);
+        const startRow = sheetNew.getLastRow() + 1;
+        ensureCapacity(sheetNew, startRow + unpinnedNewRows.length);
+        sheetNew.getRange(startRow, 1, unpinnedNewRows.length, CONFIG.HEADERS.length).setValues(unpinnedNewRows);
       }
       if (pinnedRows.length > 0) {
-        sheetPinned.getRange(2, 1, pinnedRows.length, CONFIG.HEADERS.length).setValues(pinnedRows);
+        const startRow = sheetPinned.getLastRow() + 1;
+        ensureCapacity(sheetPinned, startRow + pinnedRows.length);
+        sheetPinned.getRange(startRow, 1, pinnedRows.length, CONFIG.HEADERS.length).setValues(pinnedRows);
       }
+
+      SpreadsheetApp.flush();
 
       return jsonResponse({
         status: "success",
+        chunkIndex: payload.chunk_index || 0,
+        totalChunks: payload.total_chunks || 1,
         unpinnedCount: unpinnedNewRows.length,
         pinnedCount: pinnedRows.length
       });
@@ -394,6 +409,16 @@ function doPost(e) {
     return jsonResponse({ error: err.toString(), stack: err.stack }, 500);
   } finally {
     lock.releaseLock();
+  }
+}
+
+/**
+ * Ensures a sheet has at least requiredRows rows to prevent out-of-bounds range errors
+ */
+function ensureCapacity(sheet, requiredRows) {
+  const currentMax = sheet.getMaxRows();
+  if (currentMax < requiredRows) {
+    sheet.insertRowsAfter(currentMax, requiredRows - currentMax);
   }
 }
 
