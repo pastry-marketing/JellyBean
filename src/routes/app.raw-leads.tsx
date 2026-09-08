@@ -109,7 +109,8 @@ export const Route = createFileRoute("/app/raw-leads")({
 
 const TABLE = "raw_lead_cache";
 const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
-const DEFAULT_PAGE_SIZE = 100;
+type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+const DEFAULT_PAGE_SIZE = 500;
 type RawLeadCacheUpdate = Database["public"]["Tables"]["raw_lead_cache"]["Update"];
 
 // ── Types ─────────────────────────────────────────────────────────────────────

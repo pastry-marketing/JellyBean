@@ -334,7 +334,7 @@ export const fetchRawLeadKeyset = createServerFn({ method: "GET" })
   .inputValidator((input) =>
     z
       .object({
-        limit: z.number().int().min(1).max(500).default(100),
+        limit: z.number().int().min(1).max(500).default(500),
         cursor: z
           .object({
             captured_at: z.string().nullable(),
