@@ -1328,21 +1328,50 @@ function Inner() {
   const runAiLeadCheckRef = useRef(runAiLeadCheck);
   runAiLeadCheckRef.current = runAiLeadCheck;
 
+  // Counter that increments every time a batch finishes, guaranteeing the
+  // effect below always re-fires even when aiRunning settles to the same value.
+  const [aiBatchDoneCount, setAiBatchDoneCount] = useState(0);
+  const prevAiRunning = useRef(aiRunning);
   useEffect(() => {
-    if (!aiRunning && isAutoCheckingRef.current && !aiLockedByOther) {
-      if (aiTargetsRef.current.length > 0) {
-        const timer = setTimeout(() => {
-          if (isAutoCheckingRef.current) {
-            runAiLeadCheckRef.current();
-          }
-        }, 1000);
-        return () => clearTimeout(timer);
-      } else {
-        setIsAutoChecking(false);
-        toast.success("Auto-check complete! No more leads to process.");
-      }
+    // Detect the falling edge: aiRunning went from true → false
+    if (prevAiRunning.current && !aiRunning) {
+      setAiBatchDoneCount((c) => c + 1);
     }
-  }, [aiRunning, aiLockedByOther]);
+    prevAiRunning.current = aiRunning;
+  }, [aiRunning]);
+
+  // Tracks consecutive "no targets" polls so we back off instead of spamming
+  const noTargetsPollCount = useRef(0);
+
+  useEffect(() => {
+    if (aiRunning || !isAutoCheckingRef.current || aiLockedByOther) return;
+
+    if (aiTargetsRef.current.length > 0) {
+      // There are leads to check — reset poll counter and fire after a short delay
+      noTargetsPollCount.current = 0;
+      const timer = setTimeout(() => {
+        if (isAutoCheckingRef.current) {
+          runAiLeadCheckRef.current();
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      // No leads on the current page — refetch data and wait progressively
+      // longer to avoid hammering the server when nothing is available.
+      noTargetsPollCount.current += 1;
+      // Back off: 5s, 10s, 15s, … up to 30s max
+      const delaySec = Math.min(noTargetsPollCount.current * 5, 30);
+      const timer = setTimeout(() => {
+        if (!isAutoCheckingRef.current) return;
+        // Refetch the page data — new leads may have arrived
+        cacheQuery.refetch();
+        countsQuery.refetch();
+      }, delaySec * 1000);
+      return () => clearTimeout(timer);
+    }
+    // aiBatchDoneCount is key: it changes every time a batch finishes,
+    // which forces this effect to re-evaluate even when other deps are stable.
+  }, [aiRunning, aiLockedByOther, aiBatchDoneCount]);
 
   return (
     <div className="space-y-4">
