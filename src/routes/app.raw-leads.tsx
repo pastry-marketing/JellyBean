@@ -1364,36 +1364,43 @@ function Inner() {
 
   // Tracks consecutive "no targets" polls so we back off instead of spamming
   const noTargetsPollCount = useRef(0);
+  // Bumped after every idle poll so the waiting loop keeps itself alive.
+  const [autoPollTick, setAutoPollTick] = useState(0);
+  const aiTargetCount = aiTargets.length;
 
   useEffect(() => {
-    if (aiRunning || !isAutoCheckingRef.current || aiLockedByOther) return;
+    if (aiRunning || !isAutoChecking || aiLockedByOther) return;
 
-    if (aiTargetsRef.current.length > 0) {
-      // There are leads to check — reset poll counter and fire after a short delay
+    if (aiTargetCount > 0) {
+      // Leads waiting — reset counters and fire after a short delay. On repeated
+      // failures wait progressively longer instead of retrying in a tight loop.
       noTargetsPollCount.current = 0;
+      const delayMs = aiFailureCount.current > 0
+        ? Math.min(aiFailureCount.current * 15_000, 120_000)
+        : 1000;
       const timer = setTimeout(() => {
         if (isAutoCheckingRef.current) {
-          runAiLeadCheckRef.current();
+          runAiLeadCheckRef.current(true);
         }
-      }, 1000);
-      return () => clearTimeout(timer);
-    } else {
-      // No leads on the current page — refetch data and wait progressively
-      // longer to avoid hammering the server when nothing is available.
-      noTargetsPollCount.current += 1;
-      // Back off: 5s, 10s, 15s, … up to 30s max
-      const delaySec = Math.min(noTargetsPollCount.current * 5, 30);
-      const timer = setTimeout(() => {
-        if (!isAutoCheckingRef.current) return;
-        // Refetch the page data — new leads may have arrived
-        cacheQuery.refetch();
-        countsQuery.refetch();
-      }, delaySec * 1000);
+      }, delayMs);
       return () => clearTimeout(timer);
     }
-    // aiBatchDoneCount is key: it changes every time a batch finishes,
-    // which forces this effect to re-evaluate even when other deps are stable.
-  }, [aiRunning, aiLockedByOther, aiBatchDoneCount]);
+
+    // No leads to check — quietly wait and keep polling with a growing delay.
+    noTargetsPollCount.current += 1;
+    const delaySec = Math.min(noTargetsPollCount.current * 5, 30);
+    const timer = setTimeout(() => {
+      if (!isAutoCheckingRef.current) return;
+      // New leads may have arrived since the last poll.
+      cacheQuery.refetch();
+      countsQuery.refetch();
+      setAutoPollTick((t) => t + 1);
+    }, delaySec * 1000);
+    return () => clearTimeout(timer);
+    // aiBatchDoneCount changes every time a batch finishes and autoPollTick
+    // every idle poll, so this effect always re-arms itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiRunning, aiLockedByOther, aiBatchDoneCount, isAutoChecking, aiTargetCount, autoPollTick]);
 
   return (
     <div className="space-y-4">
