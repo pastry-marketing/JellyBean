@@ -621,6 +621,9 @@ const RAW_LEADS_AUTO_CONTINUE_KEY = "raw_leads_auto_continue_enabled";
 
 function useAutoContinueToggle(userId: string | undefined) {
   const qc = useQueryClient();
+  // Local intent wins until the server confirms the same value, so a slow or
+  // failed refetch can never silently flip the tick mark back off.
+  const [pending, setPending] = useState<boolean | null>(null);
   const query = useQuery({
     queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY],
     queryFn: async () => {
@@ -641,7 +644,15 @@ function useAutoContinueToggle(userId: string | undefined) {
       return false; // Default is OFF
     },
     staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    retry: 2,
   });
+
+  const serverEnabled = query.data;
+
+  useEffect(() => {
+    if (pending !== null && serverEnabled === pending) setPending(null);
+  }, [pending, serverEnabled]);
 
   useEffect(() => {
     const channel = supabase
@@ -663,21 +674,26 @@ function useAutoContinueToggle(userId: string | undefined) {
   }, [qc]);
 
   const setEnabled = async (enabled: boolean) => {
+    setPending(enabled);
     qc.setQueryData(["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY], enabled);
-    const { error } = await supabase.from("shared_state").upsert({
-      key: RAW_LEADS_AUTO_CONTINUE_KEY,
-      value: { enabled },
-      updated_by: userId ?? null,
-      updated_at: new Date().toISOString(),
-    });
+    const { error } = await supabase.from("shared_state").upsert(
+      {
+        key: RAW_LEADS_AUTO_CONTINUE_KEY,
+        value: { enabled },
+        updated_by: userId ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
     if (error) {
+      setPending(null);
       qc.invalidateQueries({ queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY] });
       throw error;
     }
   };
 
   return {
-    enabled: Boolean(query.data),
+    enabled: pending ?? Boolean(serverEnabled),
     setEnabled,
   };
 }
