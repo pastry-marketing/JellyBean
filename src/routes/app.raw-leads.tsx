@@ -1320,9 +1320,11 @@ function Inner() {
         const lead = leadByKey.get(entry.row_key);
         return lead ? { ...entry, lead } : entry;
       });
+      aiFailureCount.current = 0;
       toast.success(`AI checked ${result.analyzed}: ${result.yes} Yes, ${result.no} No`);
     } catch (e) {
-      toast.error(friendlyError(e));
+      aiFailureCount.current += 1;
+      if (!auto || aiFailureCount.current <= 3) toast.error(friendlyError(e));
     } finally {
       try {
         await writeAiLock(null, currentUserId);
