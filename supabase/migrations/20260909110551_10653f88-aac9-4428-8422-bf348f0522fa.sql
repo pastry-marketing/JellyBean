@@ -1,0 +1,1 @@
+ALTER VIEW public.processed_leads_export SET (security_invoker = on);
