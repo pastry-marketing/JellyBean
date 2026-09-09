@@ -621,9 +621,6 @@ const RAW_LEADS_AUTO_CONTINUE_KEY = "raw_leads_auto_continue_enabled";
 
 function useAutoContinueToggle(userId: string | undefined) {
   const qc = useQueryClient();
-  // Local intent wins until the server confirms the same value, so a slow or
-  // failed refetch can never silently flip the tick mark back off.
-  const [pending, setPending] = useState<boolean | null>(null);
   const query = useQuery({
     queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY],
     queryFn: async () => {
@@ -644,15 +641,7 @@ function useAutoContinueToggle(userId: string | undefined) {
       return false; // Default is OFF
     },
     staleTime: 30_000,
-    refetchOnWindowFocus: false,
-    retry: 2,
   });
-
-  const serverEnabled = query.data;
-
-  useEffect(() => {
-    if (pending !== null && serverEnabled === pending) setPending(null);
-  }, [pending, serverEnabled]);
 
   useEffect(() => {
     const channel = supabase
@@ -674,26 +663,21 @@ function useAutoContinueToggle(userId: string | undefined) {
   }, [qc]);
 
   const setEnabled = async (enabled: boolean) => {
-    setPending(enabled);
     qc.setQueryData(["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY], enabled);
-    const { error } = await supabase.from("shared_state").upsert(
-      {
-        key: RAW_LEADS_AUTO_CONTINUE_KEY,
-        value: { enabled },
-        updated_by: userId ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "key" },
-    );
+    const { error } = await supabase.from("shared_state").upsert({
+      key: RAW_LEADS_AUTO_CONTINUE_KEY,
+      value: { enabled },
+      updated_by: userId ?? null,
+      updated_at: new Date().toISOString(),
+    });
     if (error) {
-      setPending(null);
       qc.invalidateQueries({ queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY] });
       throw error;
     }
   };
 
   return {
-    enabled: pending ?? Boolean(serverEnabled),
+    enabled: Boolean(query.data),
     setEnabled,
   };
 }
@@ -1270,26 +1254,22 @@ function Inner() {
     [cacheQuery, currentUserId, qc, updateCachedEntries],
   );
 
-  // Consecutive auto-run failures, used to back off instead of retrying hard.
-  const aiFailureCount = useRef(0);
-
-  async function runAiLeadCheck(auto = false) {
+  async function runAiLeadCheck() {
     if (!canRunAi) {
-      if (!auto) toast.error("You don't have permission to run AI lead checks.");
+      toast.error("You don't have permission to run AI lead checks.");
       return;
     }
     const prompt = aiPrompt.trim();
     if (!prompt) {
-      if (!auto) toast.error("Write a prompt first.");
+      toast.error("Write a prompt first.");
       return;
     }
     if (aiTargets.length === 0) {
-      // Auto mode just waits for new leads instead of spamming a toast.
-      if (!auto) toast.info("No visible raw leads with post text to analyze.");
+      toast.info("No visible raw leads with post text to analyze.");
       return;
     }
     if (aiLockedByOther) {
-      if (!auto) toast.error("Another user is already running an AI batch. Wait for it to finish.");
+      toast.error("Another user is already running an AI batch. Wait for it to finish.");
       return;
     }
 
@@ -1320,11 +1300,9 @@ function Inner() {
         const lead = leadByKey.get(entry.row_key);
         return lead ? { ...entry, lead } : entry;
       });
-      aiFailureCount.current = 0;
       toast.success(`AI checked ${result.analyzed}: ${result.yes} Yes, ${result.no} No`);
     } catch (e) {
-      aiFailureCount.current += 1;
-      if (!auto || aiFailureCount.current <= 3) toast.error(friendlyError(e));
+      toast.error(friendlyError(e));
     } finally {
       try {
         await writeAiLock(null, currentUserId);
@@ -1350,57 +1328,21 @@ function Inner() {
   const runAiLeadCheckRef = useRef(runAiLeadCheck);
   runAiLeadCheckRef.current = runAiLeadCheck;
 
-  // Counter that increments every time a batch finishes, guaranteeing the
-  // effect below always re-fires even when aiRunning settles to the same value.
-  const [aiBatchDoneCount, setAiBatchDoneCount] = useState(0);
-  const prevAiRunning = useRef(aiRunning);
   useEffect(() => {
-    // Detect the falling edge: aiRunning went from true → false
-    if (prevAiRunning.current && !aiRunning) {
-      setAiBatchDoneCount((c) => c + 1);
+    if (!aiRunning && isAutoCheckingRef.current && !aiLockedByOther) {
+      if (aiTargetsRef.current.length > 0) {
+        const timer = setTimeout(() => {
+          if (isAutoCheckingRef.current) {
+            runAiLeadCheckRef.current();
+          }
+        }, 1000);
+        return () => clearTimeout(timer);
+      } else {
+        setIsAutoChecking(false);
+        toast.success("Auto-check complete! No more leads to process.");
+      }
     }
-    prevAiRunning.current = aiRunning;
-  }, [aiRunning]);
-
-  // Tracks consecutive "no targets" polls so we back off instead of spamming
-  const noTargetsPollCount = useRef(0);
-  // Bumped after every idle poll so the waiting loop keeps itself alive.
-  const [autoPollTick, setAutoPollTick] = useState(0);
-  const aiTargetCount = aiTargets.length;
-
-  useEffect(() => {
-    if (aiRunning || !isAutoChecking || aiLockedByOther) return;
-
-    if (aiTargetCount > 0) {
-      // Leads waiting — reset counters and fire after a short delay. On repeated
-      // failures wait progressively longer instead of retrying in a tight loop.
-      noTargetsPollCount.current = 0;
-      const delayMs = aiFailureCount.current > 0
-        ? Math.min(aiFailureCount.current * 15_000, 120_000)
-        : 1000;
-      const timer = setTimeout(() => {
-        if (isAutoCheckingRef.current) {
-          runAiLeadCheckRef.current(true);
-        }
-      }, delayMs);
-      return () => clearTimeout(timer);
-    }
-
-    // No leads to check — quietly wait and keep polling with a growing delay.
-    noTargetsPollCount.current += 1;
-    const delaySec = Math.min(noTargetsPollCount.current * 5, 30);
-    const timer = setTimeout(() => {
-      if (!isAutoCheckingRef.current) return;
-      // New leads may have arrived since the last poll.
-      cacheQuery.refetch();
-      countsQuery.refetch();
-      setAutoPollTick((t) => t + 1);
-    }, delaySec * 1000);
-    return () => clearTimeout(timer);
-    // aiBatchDoneCount changes every time a batch finishes and autoPollTick
-    // every idle poll, so this effect always re-arms itself.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [aiRunning, aiLockedByOther, aiBatchDoneCount, isAutoChecking, aiTargetCount, autoPollTick]);
+  }, [aiRunning, aiLockedByOther]);
 
   return (
     <div className="space-y-4">

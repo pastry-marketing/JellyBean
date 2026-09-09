@@ -473,13 +473,6 @@ export type Database = {
             foreignKeyName: "incogniton_profiles_linked_lead_id_fkey"
             columns: ["linked_lead_id"]
             isOneToOne: false
-            referencedRelation: "processed_leads_export"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "incogniton_profiles_linked_lead_id_fkey"
-            columns: ["linked_lead_id"]
-            isOneToOne: false
             referencedRelation: "qualified_leads"
             referencedColumns: ["id"]
           },
@@ -547,13 +540,6 @@ export type Database = {
           sender_user_id?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "lead_reminders_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "processed_leads_export"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "lead_reminders_lead_id_fkey"
             columns: ["lead_id"]
@@ -1062,22 +1048,6 @@ export type Database = {
           category: string | null
           is_assigned_myself: boolean | null
           total: number | null
-        }
-        Relationships: []
-      }
-      processed_leads_export: {
-        Row: {
-          "Assigned Date": string | null
-          "Current Status": Database["public"]["Enums"]["cs_status"] | null
-          "Customer Name": string | null
-          "Handled By": string | null
-          id: string | null
-          "Main Area": string | null
-          "Marketing Notes": string | null
-          "Nextdoor Link": string | null
-          "Phone Number": string | null
-          "Service Required": string | null
-          "Sub Area": string | null
         }
         Relationships: []
       }
