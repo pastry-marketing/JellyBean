@@ -87,7 +87,11 @@ import { downloadCsv, formatPhone } from "@/lib/crm-lite";
 import type { CsStatus, LeadNote } from "@/lib/crm-types";
 import { NumberNameSelect } from "@/components/number-name-select";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/lead-statuses";
-import { renderCsComposeSuggestion } from "@/lib/cs-compose-template";
+import {
+  DEFAULT_CS_REPHRASE_PROMPT,
+  hasComposeSource,
+  hasComposePlaceholder,
+} from "@/lib/cs-compose";
 import { rephraseLeadTemplateWithAi, autoRephraseLeadWithAi } from "@/lib/raw-leads-ai.functions";
 import { SERVICE_CATEGORIES } from "@/data/service-options";
 
@@ -122,28 +126,7 @@ function formatLeadServiceLabel(service: string | null): string | null {
   return service;
 }
 
-export const DEFAULT_REPHRASE_PROMPT = `You are an expert customer service assistant. Your goal is to clean, extract, and normalize three parts of a customer lead request to prepare them for an outbound message.
-
-You must output a JSON object containing exactly three fields:
-1. "serviceContext": A very short, clean name of the service (e.g. "garage door repair", "lawn care", "plumbing leak"). It must be concise and lowercase. Never use "service", "seeking", "repair or replacement", or "damaged or non-functioning".
-2. "requirement1": The first requirement or question normalized as an action-oriented phrase starting with a lowercase verb.
-3. "requirement2": The second requirement or question normalized as an action-oriented phrase starting with a lowercase verb.
-
-Normalization Rules for Requirements (both requirement1 and requirement2):
-- If the requirement refers to address, location, or where to go, normalize it to: "share your complete address"
-- If the requirement refers to availability, time, or when they are available, normalize it to: "let me know your availability"
-- If the requirement refers to a photo, picture, image, or snapshot, normalize it to: "send me a picture of it"
-- Otherwise, rephrase to start with a verb (e.g. "confirm whether you have the spring on hand").
-- Requirement text must not be capitalized or end with punctuation.
-
-Forbidden Phrases (do not use in any field):
-- "I understand"
-- "seeking"
-- "repair or replacement"
-- "damaged or non-functioning"
-- "provide the service address"
-- "our schedule"
-- "arrange a visit"`;
+export const DEFAULT_REPHRASE_PROMPT = DEFAULT_CS_REPHRASE_PROMPT;
 
 export const Route = createFileRoute("/app/cs-leads")({
   component: Page,
@@ -562,12 +545,10 @@ function Inner() {
   async function runBulkRephrase() {
     if (selectedIds.size === 0) return;
     const selectedLeads = (list.data ?? []).filter((l) => selectedIds.has(l.id));
-    const targets = selectedLeads.filter(
-      (lead) => lead.context?.trim() && (lead.requirement_1?.trim() || lead.requirement_2?.trim()),
-    );
+    const targets = selectedLeads.filter((lead) => hasComposeSource(lead));
 
     if (targets.length === 0) {
-      toast.error("None of the selected leads have both post text and requirements added.");
+      toast.error("Add the customer post or context before composing these leads.");
       return;
     }
 
@@ -587,6 +568,8 @@ function Inner() {
               template: templateObj.template,
               customerName: lead.customer_name || "there",
               contextText: lead.context,
+              postText: lead.post_text,
+              service: lead.service,
               requirement1: lead.requirement_1 || "",
               requirement2: lead.requirement_2 || "",
               systemPrompt: aiPrompt,
@@ -596,11 +579,20 @@ function Inner() {
           if (result?.rephrased) {
             const { error: dbError } = await supabase
               .from("qualified_leads")
-              .update({ marketing_notes: result.rephrased } as never)
+              .update({
+                marketing_notes: result.rephrased,
+                requirement_1: result.requirement1 || null,
+                requirement_2: result.requirement2 || null,
+              } as never)
               .eq("id", lead.id);
 
             if (dbError) throw dbError;
-            void syncLeadToGoogleSheet("UPDATE", { ...lead, marketing_notes: result.rephrased });
+            void syncLeadToGoogleSheet("UPDATE", {
+              ...lead,
+              marketing_notes: result.rephrased,
+              requirement_1: result.requirement1 || null,
+              requirement_2: result.requirement2 || null,
+            });
             successCount++;
           }
         } catch (err) {
@@ -1136,7 +1128,11 @@ function Inner() {
                   qc.invalidateQueries({ queryKey: ["cs_leads"] });
                 }
               })
-              .catch(() => {});
+              .catch((err) => {
+                toast.error(`Message for ${name} needs review: ${friendlyError(err)}`, {
+                  id: `auto-compose-${payload.new.id}`,
+                });
+              });
           }
 
           qc.invalidateQueries({ queryKey: ["cs_leads"] });
@@ -1154,7 +1150,7 @@ function Inner() {
       clearTimeout(t);
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [qc]);
 
   useEffect(() => {
     if (!incomingLead) return;
@@ -1670,14 +1666,10 @@ function Inner() {
                       Eligible:{" "}
                       {
                         (list.data ?? []).filter(
-                          (l) =>
-                            selectedIds.has(l.id) &&
-                            l.post_text?.trim() &&
-                            (l.requirement_1?.trim() || l.requirement_2?.trim()),
+                          (l) => selectedIds.has(l.id) && hasComposeSource(l),
                         ).length
                       }{" "}
-                      of {selectedIds.size} selected (requires exact post text and at least one
-                      requirement).
+                      of {selectedIds.size} selected (requires a customer post or context).
                     </div>
                   )}
                 </div>
@@ -2232,24 +2224,34 @@ function LeadCard({
   const [selectedTemplateText, setSelectedTemplateText] = useState("");
   const rephraseFn = useServerFn(rephraseLeadTemplateWithAi);
 
-  async function handleRephrase(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (!lead.context) return;
+  async function handleRephrase(e?: React.MouseEvent, templateOverride?: string) {
+    e?.stopPropagation();
+    if (rephrasing || !hasComposeSource(lead)) return;
     setRephrasing(true);
     try {
-      const templateToUse = selectedTemplateText || compose || finalTemplates[0]?.template || "";
+      const templateToUse =
+        templateOverride || selectedTemplateText || compose || finalTemplates[0]?.template || "";
       const result = await rephraseFn({
         data: {
           template: templateToUse,
           customerName: lead.customer_name || "there",
           contextText: lead.context,
+          postText: lead.post_text,
+          service: lead.service,
           requirement1: requirement1,
           requirement2: requirement2,
         },
       });
       if (result?.rephrased) {
         setCompose(result.rephrased);
-        await saveField({ marketing_notes: result.rephrased } as Partial<Lead>);
+        setRequirement1(result.requirement1);
+        setRequirement2(result.requirement2);
+        const saved = await saveField({
+          marketing_notes: result.rephrased,
+          requirement_1: result.requirement1 || null,
+          requirement_2: result.requirement2 || null,
+        } as Partial<Lead>);
+        if (!saved) return;
         qc.invalidateQueries({ queryKey: ["cs_leads"] });
         toast.success("Rephrased template with AI");
       } else {
@@ -2264,9 +2266,6 @@ function LeadCard({
 
   const finalTemplates =
     Array.isArray(templates) && templates.length > 0 ? templates : DEFAULT_COMPOSE_TEMPLATES;
-  const composeSuggestion = finalTemplates[0]
-    ? renderCsComposeSuggestion(finalTemplates[0].template, lead)
-    : "";
 
   async function saveField(patch: Partial<Lead>) {
     const { error } = await supabase
@@ -2649,14 +2648,12 @@ function LeadCard({
           <Label className="crm-lead-label">Compose</Label>
           <div className="flex items-center gap-1.5">
             <Select
+              disabled={rephrasing || !hasComposeSource(lead)}
               onValueChange={async (val) => {
                 const selectedTpl = finalTemplates.find((t) => t.id === val);
                 if (selectedTpl) {
-                  const generated = renderCsComposeSuggestion(selectedTpl.template, lead);
-                  setCompose(generated);
                   setSelectedTemplateText(selectedTpl.template);
-                  await saveField({ marketing_notes: generated } as Partial<Lead>);
-                  qc.invalidateQueries({ queryKey: ["cs_leads"] });
+                  await handleRephrase(undefined, selectedTpl.template);
                 }
               }}
             >
@@ -2671,12 +2668,12 @@ function LeadCard({
                 ))}
               </SelectContent>
             </Select>
-            {lead.context && (
+            {hasComposeSource(lead) && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={handleRephrase}
+                onClick={() => void handleRephrase()}
                 disabled={rephrasing}
                 className="h-6 px-2 text-[10px] border-primary/40 text-primary hover:bg-primary/5 inline-flex items-center"
               >
@@ -2695,6 +2692,12 @@ function LeadCard({
           rows={1}
           onChange={(e) => setCompose(e.target.value)}
           onBlur={async () => {
+            if (hasComposePlaceholder(compose)) {
+              toast.error(
+                "Compose the message before saving; a template placeholder is still present.",
+              );
+              return;
+            }
             if ((compose || "") !== (lead.marketing_notes ?? "")) {
               if (await saveField({ marketing_notes: compose } as Partial<Lead>)) {
                 qc.invalidateQueries({ queryKey: ["cs_leads"] });
@@ -2704,17 +2707,6 @@ function LeadCard({
           className="text-[12.5px] mt-1.5 h-10 min-h-[40px] resize-none leading-relaxed py-2.5"
           placeholder="Compose a message or note for this lead…"
         />
-        {composeSuggestion && (
-          <ComposeSuggestion
-            suggestion={composeSuggestion}
-            compact
-            onClick={async () => {
-              setCompose(composeSuggestion);
-              await saveField({ marketing_notes: composeSuggestion } as Partial<Lead>);
-              qc.invalidateQueries({ queryKey: ["cs_leads"] });
-            }}
-          />
-        )}
       </div>
 
       {/* Assignment row */}
@@ -3102,6 +3094,7 @@ function LeadDrawer({
     status !== lead.cs_status ||
     assignedTo !== lead.assigned_to ||
     note !== "" ||
+    compose !== (lead.marketing_notes ?? "") ||
     requirement1 !== (lead.requirement_1 ?? "") ||
     requirement2 !== (lead.requirement_2 ?? "") ||
     followup !== initialFollowup ||
@@ -3137,22 +3130,27 @@ function LeadDrawer({
   const [selectedTemplateText, setSelectedTemplateText] = useState("");
   const rephraseFn = useServerFn(rephraseLeadTemplateWithAi);
 
-  async function handleRephrase() {
-    if (!lead.context) return;
+  async function handleRephrase(templateOverride?: string) {
+    if (rephrasing || !hasComposeSource(lead)) return;
     setRephrasing(true);
     try {
-      const templateToUse = selectedTemplateText || compose || finalTemplates[0]?.template || "";
+      const templateToUse =
+        templateOverride || selectedTemplateText || compose || finalTemplates[0]?.template || "";
       const result = await rephraseFn({
         data: {
           template: templateToUse,
           customerName: lead.customer_name || "there",
           contextText: lead.context,
+          postText: lead.post_text,
+          service: lead.service,
           requirement1: requirement1,
           requirement2: requirement2,
         },
       });
       if (result?.rephrased) {
         setCompose(result.rephrased);
+        setRequirement1(result.requirement1);
+        setRequirement2(result.requirement2);
         toast.success("Rephrased template with AI");
       } else {
         toast.error("AI did not return a rephrased message");
@@ -3166,11 +3164,13 @@ function LeadDrawer({
 
   const finalTemplates =
     Array.isArray(templates) && templates.length > 0 ? templates : DEFAULT_COMPOSE_TEMPLATES;
-  const composeSuggestion = finalTemplates[0]
-    ? renderCsComposeSuggestion(finalTemplates[0].template, lead)
-    : "";
 
   async function save() {
+    if (rephrasing) return;
+    if (hasComposePlaceholder(compose)) {
+      toast.error("Compose the message before saving; a template placeholder is still present.");
+      return;
+    }
     setBusy(true);
     try {
       const newNotes = note.trim()
@@ -3370,12 +3370,12 @@ function LeadDrawer({
                   </Label>
                   <div className="flex items-center gap-2">
                     <Select
+                      disabled={rephrasing || !hasComposeSource(lead)}
                       onValueChange={(val) => {
                         const selectedTpl = finalTemplates.find((t) => t.id === val);
                         if (selectedTpl) {
-                          const generated = renderCsComposeSuggestion(selectedTpl.template, lead);
-                          setCompose(generated);
                           setSelectedTemplateText(selectedTpl.template);
+                          void handleRephrase(selectedTpl.template);
                         }
                       }}
                     >
@@ -3390,12 +3390,12 @@ function LeadDrawer({
                         ))}
                       </SelectContent>
                     </Select>
-                    {lead.context && (
+                    {hasComposeSource(lead) && (
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={handleRephrase}
+                        onClick={() => void handleRephrase()}
                         disabled={rephrasing}
                         className="h-7 px-2 text-[11px] border-primary/40 text-primary hover:bg-primary/5 inline-flex items-center"
                       >
@@ -3416,14 +3416,6 @@ function LeadDrawer({
                   maxLength={2000}
                   placeholder="Compose a message or note for this lead..."
                 />
-                {composeSuggestion && (
-                  <ComposeSuggestion
-                    suggestion={composeSuggestion}
-                    onClick={() => {
-                      setCompose(composeSuggestion);
-                    }}
-                  />
-                )}
               </div>
               <div>
                 <Label className="block mb-1.5 text-[11.5px] uppercase tracking-wide text-muted-foreground font-medium">
@@ -3591,7 +3583,7 @@ function LeadDrawer({
             <Button variant="outline" onClick={handleClose} disabled={busy}>
               Close
             </Button>
-            <Button onClick={save} disabled={busy}>
+            <Button onClick={save} disabled={busy || rephrasing}>
               {busy && <Loader2 className="h-4 w-4 animate-spin mr-2" />}Save
             </Button>
           </div>
@@ -3599,36 +3591,6 @@ function LeadDrawer({
       </div>
     </div>,
     document.body,
-  );
-}
-
-function ComposeSuggestion({
-  suggestion,
-  compact = false,
-  onClick,
-}: {
-  suggestion: string;
-  compact?: boolean;
-  onClick?: () => void;
-}) {
-  if (!suggestion) return null;
-  return (
-    <div
-      onClick={onClick}
-      className={cn(
-        "mt-2 rounded-md border border-dashed border-border bg-surface/60 text-muted-foreground transition-colors",
-        onClick &&
-          "cursor-pointer hover:bg-surface-strong hover:text-foreground hover:border-primary/60",
-        compact ? "px-2.5 py-2 text-[11.5px]" : "px-3 py-2.5 text-[12px]",
-      )}
-      title={onClick ? "Click to insert into compose box" : undefined}
-    >
-      <div className="mb-1 text-[10px] uppercase tracking-wide font-semibold flex items-center justify-between">
-        <span>Suggestion</span>
-        {onClick && <span className="text-[9px] text-primary/80 lowercase">Click to apply</span>}
-      </div>
-      <div className="whitespace-pre-wrap leading-relaxed">{suggestion}</div>
-    </div>
   );
 }
 
