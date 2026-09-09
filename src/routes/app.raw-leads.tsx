@@ -1270,22 +1270,26 @@ function Inner() {
     [cacheQuery, currentUserId, qc, updateCachedEntries],
   );
 
-  async function runAiLeadCheck() {
+  // Consecutive auto-run failures, used to back off instead of retrying hard.
+  const aiFailureCount = useRef(0);
+
+  async function runAiLeadCheck(auto = false) {
     if (!canRunAi) {
-      toast.error("You don't have permission to run AI lead checks.");
+      if (!auto) toast.error("You don't have permission to run AI lead checks.");
       return;
     }
     const prompt = aiPrompt.trim();
     if (!prompt) {
-      toast.error("Write a prompt first.");
+      if (!auto) toast.error("Write a prompt first.");
       return;
     }
     if (aiTargets.length === 0) {
-      toast.info("No visible raw leads with post text to analyze.");
+      // Auto mode just waits for new leads instead of spamming a toast.
+      if (!auto) toast.info("No visible raw leads with post text to analyze.");
       return;
     }
     if (aiLockedByOther) {
-      toast.error("Another user is already running an AI batch. Wait for it to finish.");
+      if (!auto) toast.error("Another user is already running an AI batch. Wait for it to finish.");
       return;
     }
 
