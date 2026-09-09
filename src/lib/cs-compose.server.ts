@@ -104,7 +104,7 @@ export async function composeCsLead(
   const options = {
     apiKey,
     model: overrides.model || process.env.CS_COMPOSE_MODEL || "gpt-4o-mini",
-    fetcher: overrides.fetcher || fetch,
+    fetcher: overrides.fetcher || globalThis.fetch.bind(globalThis),
   };
   const source = {
     originalPost: input.postText?.trim() || "",
