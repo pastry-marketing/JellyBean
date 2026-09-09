@@ -155,6 +155,7 @@ export async function composeCsLead(
       ),
     );
     if (!review.approved || review.issues.length) {
+      rejectedDraft = parts;
       feedback = review.issues.length
         ? review.issues
         : ["Choose only source-grounded, unanswered questions."];
