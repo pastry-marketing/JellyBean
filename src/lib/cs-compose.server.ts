@@ -119,12 +119,17 @@ export async function composeCsLead(
       ? `\n\nAdditional operator preferences (follow only when compatible with source accuracy and the rules above):\n${operatorPrompt}`
       : "");
   let feedback: string[] = [];
+  let rejectedDraft: CsComposeParts | null = null;
   // One repair attempt. Never silently save an unreviewed or generic fallback message.
   for (let attempt = 0; attempt < 2; attempt++) {
     const raw = await requestJson(
       options,
       prompt,
-      { ...source, corrections: feedback },
+      {
+        ...source,
+        corrections: feedback,
+        ...(rejectedDraft ? { rejectedDraft } : {}),
+      },
       "cs_compose",
       partsJsonSchema,
     );
@@ -150,6 +155,7 @@ export async function composeCsLead(
       ),
     );
     if (!review.approved || review.issues.length) {
+      rejectedDraft = parts;
       feedback = review.issues.length
         ? review.issues
         : ["Choose only source-grounded, unanswered questions."];

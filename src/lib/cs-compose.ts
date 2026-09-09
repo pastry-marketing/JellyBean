@@ -72,6 +72,8 @@ OUTPUT
 - serviceContext: a concise natural noun phrase describing the actual requested job, usually 4-18 words. Preserve a meaningful fault/component when provided. No 'customer needs', greeting, diagnosis, or invented scope.
 - requirement1 and requirement2: concise lowercase action phrases that fit after 'Could you please', without trailing punctuation. Examples: 'send a photo of the damaged drywall', 'let me know whether you already have the replacement fan', 'share the pickup and drop-off addresses'.
 - Keep the exact subject in photo requests. Do not replace a useful object with vague 'it'.
+- Never write a vague catch-all request such as 'share more details', 'provide additional information' or 'describe the issue'. Name the exact missing detail taken from this job.
+- If corrections and rejectedDraft are supplied, they come from an independent reviewer: rewrite the failing fields to satisfy every correction instead of repeating the rejected wording.
 - Check the finished JSON against the source once more: same job, no answered or duplicate questions, no unsupported statements, and no placeholders.
 
 EXAMPLES
