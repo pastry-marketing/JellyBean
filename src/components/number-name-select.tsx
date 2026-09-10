@@ -102,6 +102,19 @@ export function NumberNameSelect({
           <CommandList>
             <CommandEmpty>No match.</CommandEmpty>
             <CommandGroup>
+              {/* Clear option — lets a number name be removed from the lead. */}
+              <CommandItem
+                value="No number name"
+                onSelect={() => {
+                  onChange("");
+                  onCommit?.("");
+                  setOpen(false);
+                }}
+                className="text-[12.5px] text-muted-foreground"
+              >
+                <Check className={cn("mr-2 h-3.5 w-3.5", !value ? "opacity-100" : "opacity-0")} />
+                No number name
+              </CommandItem>
               {NUMBER_NAME_OPTIONS.map((opt) => (
                 <CommandItem
                   key={opt}

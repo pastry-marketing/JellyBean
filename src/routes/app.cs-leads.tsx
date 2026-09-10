@@ -2651,7 +2651,8 @@ function LeadCard({
           onChange={(v) => setNumberName(v)}
           onCommit={async (v) => {
             if (v !== (lead.number_name ?? "")) {
-              if (await saveField({ number_name: v } as Partial<Lead>)) {
+              // Empty selection ("No number name") clears the field to null.
+              if (await saveField({ number_name: v.trim() || null } as Partial<Lead>)) {
                 qc.invalidateQueries({ queryKey: ["cs_leads"] });
               }
             }
