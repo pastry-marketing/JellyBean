@@ -664,12 +664,15 @@ function useAutoContinueToggle(userId: string | undefined) {
 
   const setEnabled = async (enabled: boolean) => {
     qc.setQueryData(["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY], enabled);
-    const { error } = await supabase.from("shared_state").upsert({
-      key: RAW_LEADS_AUTO_CONTINUE_KEY,
-      value: { enabled },
-      updated_by: userId ?? null,
-      updated_at: new Date().toISOString(),
-    });
+    const { error } = await supabase.from("shared_state").upsert(
+      {
+        key: RAW_LEADS_AUTO_CONTINUE_KEY,
+        value: { enabled },
+        updated_by: userId ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "key" },
+    );
     if (error) {
       qc.invalidateQueries({ queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY] });
       throw error;
@@ -1317,7 +1320,11 @@ function Inner() {
   const autoContinueToggle = useAutoContinueToggle(currentUserId ?? undefined);
   const isAutoChecking = autoContinueToggle.enabled;
   const setIsAutoChecking = (val: boolean) =>
-    autoContinueToggle.setEnabled(val).catch(console.error);
+    autoContinueToggle.setEnabled(val).catch((e) => {
+      // Surface the failure instead of letting the checkbox silently revert.
+      console.error(e);
+      toast.error(friendlyError(e));
+    });
 
   const isAutoCheckingRef = useRef(isAutoChecking);
   isAutoCheckingRef.current = isAutoChecking;

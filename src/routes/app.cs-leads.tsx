@@ -83,7 +83,7 @@ import type { DateRange } from "react-day-picker";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { listCsTeam, bulkAssignImportantLeads, type CsTeamMember } from "@/lib/cs-team.functions";
-import { downloadCsv, formatPhone } from "@/lib/crm-lite";
+import { downloadCsv, formatPhone, phoneSearchPattern, phoneDigitsMatch } from "@/lib/crm-lite";
 import type { CsStatus, LeadNote } from "@/lib/crm-types";
 import { NumberNameSelect } from "@/components/number-name-select";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/lead-statuses";
@@ -747,8 +747,12 @@ function Inner() {
       // Search text filter — pushed to DB across all pages
       if (dbSearch) {
         const s = `%${dbSearch}%`;
+        // Phone columns use a separator-agnostic pattern so a digits-only query
+        // matches formatted stored numbers (and vice versa). Falls back to the
+        // literal pattern for non-numeric queries.
+        const phone = phoneSearchPattern(dbSearch) ?? s;
         q = q.or(
-          `customer_name.ilike.${s},customer_number.ilike.${s},customer_number_2.ilike.${s},number_name.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s},pass_it_to.ilike.${s},requirement_1.ilike.${s},requirement_2.ilike.${s}`,
+          `customer_name.ilike.${s},customer_number.ilike.${phone},customer_number_2.ilike.${phone},number_name.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s},pass_it_to.ilike.${s},requirement_1.ilike.${s},requirement_2.ilike.${s}`,
         );
       }
 
@@ -846,8 +850,12 @@ function Inner() {
 
       if (dbSearch) {
         const s = `%${dbSearch}%`;
+        // Phone columns use a separator-agnostic pattern so a digits-only query
+        // matches formatted stored numbers (and vice versa). Falls back to the
+        // literal pattern for non-numeric queries.
+        const phone = phoneSearchPattern(dbSearch) ?? s;
         q = q.or(
-          `customer_name.ilike.${s},customer_number.ilike.${s},customer_number_2.ilike.${s},number_name.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s},pass_it_to.ilike.${s},requirement_1.ilike.${s},requirement_2.ilike.${s}`,
+          `customer_name.ilike.${s},customer_number.ilike.${phone},customer_number_2.ilike.${phone},number_name.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s},pass_it_to.ilike.${s},requirement_1.ilike.${s},requirement_2.ilike.${s}`,
         );
       }
 
@@ -915,8 +923,12 @@ function Inner() {
 
       if (dbSearch) {
         const s = `%${dbSearch}%`;
+        // Phone columns use a separator-agnostic pattern so a digits-only query
+        // matches formatted stored numbers (and vice versa). Falls back to the
+        // literal pattern for non-numeric queries.
+        const phone = phoneSearchPattern(dbSearch) ?? s;
         q = q.or(
-          `customer_name.ilike.${s},customer_number.ilike.${s},customer_number_2.ilike.${s},number_name.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s},pass_it_to.ilike.${s},requirement_1.ilike.${s},requirement_2.ilike.${s}`,
+          `customer_name.ilike.${s},customer_number.ilike.${phone},customer_number_2.ilike.${phone},number_name.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s},pass_it_to.ilike.${s},requirement_1.ilike.${s},requirement_2.ilike.${s}`,
         );
       }
 
@@ -1193,9 +1205,8 @@ function Inner() {
     return (list.data ?? []).filter((l) => {
       // Full text search — applied client-side on the 50-row page result.
       // Searches all the same fields as before: name, phone, area, requirements.
-      if (
-        q &&
-        ![
+      if (q) {
+        const textMatch = [
           l.customer_name,
           l.customer_number,
           l.customer_number_2,
@@ -1205,9 +1216,14 @@ function Inner() {
           l.pass_it_to,
           l.requirement_1,
           l.requirement_2,
-        ].some((f) => f?.toLowerCase().includes(q))
-      ) {
-        return false;
+        ].some((f) => f?.toLowerCase().includes(q));
+        // Match phone numbers by digits so formatting differences don't hide
+        // rows the DB query already matched (e.g. "5551234567" vs "(555) 123-4567").
+        const phoneMatch =
+          phoneDigitsMatch(l.customer_number, q) || phoneDigitsMatch(l.customer_number_2, q);
+        if (!textMatch && !phoneMatch) {
+          return false;
+        }
       }
       // Area filter — main_area is unindexed so kept client-side on current page.
       if (areaFilter !== "all" && l.main_area !== areaFilter && l.sub_area !== areaFilter) {

@@ -24,7 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import { formatPhone } from "@/lib/crm-lite";
+import { formatPhone, phoneSearchPattern, phoneDigitsMatch } from "@/lib/crm-lite";
 import {
   LeadForm,
   uploadLeadImages,
@@ -246,8 +246,11 @@ function Inner() {
 
       if (dbSearch) {
         const s = `%${dbSearch}%`;
+        // Separator-agnostic phone pattern so a digits-only query matches
+        // formatted stored numbers (and vice versa).
+        const phone = phoneSearchPattern(dbSearch) ?? s;
         q = q.or(
-          `customer_name.ilike.${s},customer_number.ilike.${s},service.ilike.${s},context.ilike.${s},pass_it_to.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s}`,
+          `customer_name.ilike.${s},customer_number.ilike.${phone},service.ilike.${s},context.ilike.${s},pass_it_to.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s}`,
         );
       }
 
@@ -289,8 +292,11 @@ function Inner() {
 
       if (dbSearch) {
         const s = `%${dbSearch}%`;
+        // Separator-agnostic phone pattern so a digits-only query matches
+        // formatted stored numbers (and vice versa).
+        const phone = phoneSearchPattern(dbSearch) ?? s;
         q = q.or(
-          `customer_name.ilike.${s},customer_number.ilike.${s},service.ilike.${s},context.ilike.${s},pass_it_to.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s}`,
+          `customer_name.ilike.${s},customer_number.ilike.${phone},service.ilike.${s},context.ilike.${s},pass_it_to.ilike.${s},main_area.ilike.${s},sub_area.ilike.${s}`,
         );
       }
 
@@ -304,8 +310,25 @@ function Inner() {
   const totalPages = Math.max(1, Math.ceil((totalCount.data ?? 0) / PAGE_SIZE));
 
   const filtered = useMemo(() => {
-    return list.data ?? [];
-  }, [list.data]);
+    const rows = list.data ?? [];
+    const q = dbSearch.trim();
+    // When the query is phone-like, tighten the DB's separator-agnostic match
+    // (which matches digit subsequences) down to contiguous digit matches so
+    // stray results don't show. Non-phone text queries are left to the DB.
+    if (q.replace(/\D/g, "").length < 3) return rows;
+    const lower = q.toLowerCase();
+    return rows.filter((r) => {
+      const textMatch = [
+        r.customer_name,
+        r.service,
+        r.context,
+        r.pass_it_to,
+        r.main_area,
+        r.sub_area,
+      ].some((f) => f?.toLowerCase().includes(lower));
+      return textMatch || phoneDigitsMatch(r.customer_number, q);
+    });
+  }, [list.data, dbSearch]);
 
   return (
     <div className="space-y-4">
