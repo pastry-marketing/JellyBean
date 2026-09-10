@@ -453,7 +453,10 @@ function Inner() {
   }, [query]);
 
   const dbSearch = useMemo(() => {
-    return debouncedQuery.replace(/[,"'%\\]/g, ""); // Strip characters that break postgrest .or()
+    // Strip characters that break postgrest .or() — including parentheses, which
+    // it treats as grouping syntax (so a formatted phone like "(216) 533-1500"
+    // would otherwise corrupt the filter and return nothing).
+    return debouncedQuery.replace(/[(),"'%\\]/g, "");
   }, [debouncedQuery]);
 
   const [ownerFilter, setOwnerFilter] = useState("all");
