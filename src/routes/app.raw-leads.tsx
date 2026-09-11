@@ -1104,9 +1104,16 @@ function Inner() {
 
   // Only feed AI rows that haven't been classified yet (no sheet Lead value
   // AND no user/AI override), so each click marches through the next 50.
+  // These conditions must mirror the server's acceptance filter in
+  // analyzeRawLeadsWithAi: it skips duplicate-flagged leads and posts shorter
+  // than 20 chars. Counting them here would make a "batch of 50" get trimmed
+  // server-side to a smaller number (and could keep uncheckedCount stuck above
+  // the auto-check threshold forever), so we exclude them up front.
   const uncheckedTargets = visible.filter(
     (entry) =>
-      entry.data["Post Text"]?.trim() && effectiveLead(entry.data, actions[entry.row_key]) === "",
+      !entry.duplicate_detected &&
+      (entry.data["Post Text"]?.trim().length ?? 0) >= 20 &&
+      effectiveLead(entry.data, actions[entry.row_key]) === "",
   );
   // Total unchecked leads loaded on the current page — drives auto-checking.
   const uncheckedCount = uncheckedTargets.length;
