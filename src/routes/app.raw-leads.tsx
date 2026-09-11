@@ -625,73 +625,11 @@ function Page() {
   );
 }
 
-const RAW_LEADS_AUTO_CONTINUE_KEY = "raw_leads_auto_continue_enabled";
+// When the loaded page holds this many (or more) unchecked leads, the AI
+// auto-checks them in batches of this size on its own — no toggle, no manual
+// stop — until fewer than this many unchecked leads remain.
+const AUTO_CHECK_THRESHOLD = 50;
 
-function useAutoContinueToggle(userId: string | undefined) {
-  const qc = useQueryClient();
-  const query = useQuery({
-    queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("shared_state")
-        .select("value")
-        .eq("key", RAW_LEADS_AUTO_CONTINUE_KEY)
-        .maybeSingle();
-      if (error) throw error;
-      if (
-        data?.value &&
-        typeof data.value === "object" &&
-        !Array.isArray(data.value) &&
-        "enabled" in data.value
-      ) {
-        return Boolean((data.value as { enabled?: boolean }).enabled);
-      }
-      return false; // Default is OFF
-    },
-    staleTime: 30_000,
-  });
-
-  useEffect(() => {
-    const channel = supabase
-      .channel(`raw-leads-auto-continue-${crypto.randomUUID()}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "shared_state",
-          filter: `key=eq.${RAW_LEADS_AUTO_CONTINUE_KEY}`,
-        },
-        () => qc.invalidateQueries({ queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY] }),
-      )
-      .subscribe();
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [qc]);
-
-  const setEnabled = async (enabled: boolean) => {
-    qc.setQueryData(["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY], enabled);
-    const { error } = await supabase.from("shared_state").upsert(
-      {
-        key: RAW_LEADS_AUTO_CONTINUE_KEY,
-        value: { enabled },
-        updated_by: userId ?? null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "key" },
-    );
-    if (error) {
-      qc.invalidateQueries({ queryKey: ["shared_state", RAW_LEADS_AUTO_CONTINUE_KEY] });
-      throw error;
-    }
-  };
-
-  return {
-    enabled: Boolean(query.data),
-    setEnabled,
-  };
-}
 function Inner() {
   const auth = useAuth();
   const qc = useQueryClient();
@@ -1166,12 +1104,13 @@ function Inner() {
 
   // Only feed AI rows that haven't been classified yet (no sheet Lead value
   // AND no user/AI override), so each click marches through the next 50.
-  const aiTargets = visible
-    .filter(
-      (entry) =>
-        entry.data["Post Text"]?.trim() && effectiveLead(entry.data, actions[entry.row_key]) === "",
-    )
-    .slice(0, 50);
+  const uncheckedTargets = visible.filter(
+    (entry) =>
+      entry.data["Post Text"]?.trim() && effectiveLead(entry.data, actions[entry.row_key]) === "",
+  );
+  // Total unchecked leads loaded on the current page — drives auto-checking.
+  const uncheckedCount = uncheckedTargets.length;
+  const aiTargets = uncheckedTargets.slice(0, AUTO_CHECK_THRESHOLD);
 
   function exportRows() {
     downloadCsv(
@@ -1363,39 +1302,28 @@ function Inner() {
     }
   }
 
-  const autoContinueToggle = useAutoContinueToggle(currentUserId ?? undefined);
-  const isAutoChecking = autoContinueToggle.enabled;
-  const setIsAutoChecking = (val: boolean) =>
-    autoContinueToggle.setEnabled(val).catch((e) => {
-      // Surface the failure instead of letting the checkbox silently revert.
-      console.error(e);
-      toast.error(friendlyError(e));
-    });
+  // Auto-check: while the loaded page holds AUTO_CHECK_THRESHOLD+ unchecked
+  // leads, keep firing batches on their own until fewer than that remain. There
+  // is no toggle and no manual stop — it stays "locked" while the backlog is
+  // large. When new leads push the count back over the threshold it resumes.
+  const autoActive =
+    canRunAi && !!aiPrompt.trim() && !aiLockedByOther && uncheckedCount >= AUTO_CHECK_THRESHOLD;
 
-  const isAutoCheckingRef = useRef(isAutoChecking);
-  isAutoCheckingRef.current = isAutoChecking;
-
-  const aiTargetsRef = useRef(aiTargets);
-  aiTargetsRef.current = aiTargets;
+  const autoActiveRef = useRef(autoActive);
+  autoActiveRef.current = autoActive;
 
   const runAiLeadCheckRef = useRef(runAiLeadCheck);
   runAiLeadCheckRef.current = runAiLeadCheck;
 
   useEffect(() => {
-    if (!aiRunning && isAutoCheckingRef.current && !aiLockedByOther) {
-      if (aiTargetsRef.current.length > 0) {
-        const timer = setTimeout(() => {
-          if (isAutoCheckingRef.current) {
-            runAiLeadCheckRef.current();
-          }
-        }, 1000);
-        return () => clearTimeout(timer);
-      } else {
-        setIsAutoChecking(false);
-        toast.success("Auto-check complete! No more leads to process.");
+    if (aiRunning || !autoActive) return;
+    const timer = setTimeout(() => {
+      if (autoActiveRef.current) {
+        runAiLeadCheckRef.current();
       }
-    }
-  }, [aiRunning, aiLockedByOther]);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [aiRunning, autoActive]);
 
   return (
     <div className="space-y-4">
@@ -1719,50 +1647,37 @@ function Inner() {
             <div className="flex flex-col gap-2 shrink-0">
               <Button
                 className="h-14 lg:w-[210px]"
-                onClick={() => {
-                  if (aiRunning && isAutoChecking) {
-                    setIsAutoChecking(false);
-                  } else {
-                    runAiLeadCheck();
-                  }
-                }}
+                onClick={() => runAiLeadCheck()}
                 disabled={
-                  (aiRunning && !isAutoChecking) ||
+                  autoActive || // auto mode is locked — no manual stop
+                  aiRunning ||
                   aiLockedByOther ||
-                  (aiTargets.length === 0 && !aiRunning)
+                  aiTargets.length === 0
                 }
                 title={
                   aiLockedByOther
                     ? `AI is busy — ${aiLock?.user_name ?? "another user"} is processing leads`
-                    : `Analyze the next ${aiTargets.length} visible raw lead${aiTargets.length === 1 ? "" : "s"} with post text`
+                    : autoActive
+                      ? "Auto-checking in batches of 50 — runs on its own until fewer than 50 unchecked leads remain"
+                      : `Analyze the next ${aiTargets.length} visible raw lead${aiTargets.length === 1 ? "" : "s"} with post text`
                 }
               >
-                {aiRunning || aiLockedByOther ? (
+                {aiRunning || aiLockedByOther || autoActive ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Sparkles className="h-4 w-4 mr-2" />
                 )}
                 {aiLockedByOther
                   ? "AI busy…"
-                  : aiRunning && isAutoChecking
-                    ? "Stop Auto-check"
-                    : isAutoChecking
-                      ? `Start Auto-check (${aiTargets.length || 50})`
-                      : `Check ${aiTargets.length || 50} Lead${aiTargets.length === 1 ? "" : "s"}`}
+                  : autoActive
+                    ? `Auto-checking ${uncheckedCount} leads…`
+                    : `Check ${aiTargets.length || 50} Lead${aiTargets.length === 1 ? "" : "s"}`}
               </Button>
-              <div className="flex items-center gap-2 px-1">
-                <Checkbox
-                  id="auto-check-ai"
-                  checked={isAutoChecking}
-                  onCheckedChange={(c) => setIsAutoChecking(!!c)}
-                />
-                <label
-                  htmlFor="auto-check-ai"
-                  className="text-xs text-muted-foreground cursor-pointer select-none font-medium"
-                >
-                  Auto-continue next batches
-                </label>
-              </div>
+              <p className="px-1 text-[11px] leading-snug text-muted-foreground">
+                {autoActive
+                  ? "Auto-checking 50 at a time — locked until fewer than 50 unchecked leads remain."
+                  : "Auto-checks on its own when 50+ unchecked leads are loaded. Use this button for smaller batches."}
+              </p>
             </div>
           </div>
           {aiLockedByOther && (
