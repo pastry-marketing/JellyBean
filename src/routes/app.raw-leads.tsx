@@ -1181,7 +1181,7 @@ function Inner() {
   );
 
   // ── Bulk "assign N yes-leads to me" ──────────────────────────────────────
-  const [assignCount, setAssignCount] = useState(50);
+  const [assignCount, setAssignCount] = useState(10);
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const bulkAssignYesLeads = useCallback(async () => {
     if (!currentUserId) {
@@ -1499,7 +1499,7 @@ function Inner() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[9rem]">
-                  {[10, 20, 30, 50].map((n) => (
+                  {[10, 20, 30].map((n) => (
                     <DropdownMenuItem
                       key={n}
                       onClick={() => setAssignCount(n)}
