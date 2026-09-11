@@ -58,6 +58,7 @@ import {
   Plus,
   X,
   UserMinus,
+  UserPlus,
   Layers,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -1226,6 +1227,44 @@ function Inner() {
     [cacheQuery, currentUserId, qc, removeCachedEntries],
   );
 
+  // ── Bulk "assign N yes-leads to me" ──────────────────────────────────────
+  const [assignCount, setAssignCount] = useState(50);
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const bulkAssignYesLeads = useCallback(async () => {
+    if (!currentUserId) {
+      toast.error("Sign in first.");
+      return;
+    }
+    if (bulkAssigning) return;
+    setBulkAssigning(true);
+    try {
+      // The DB function claims rows atomically with FOR UPDATE SKIP LOCKED, so
+      // several users pressing this at once never grab the same leads and none
+      // of the calls fail — each just takes the next available unclaimed rows.
+      const { data, error } = await supabase.rpc("assign_raw_leads_to_me" as never, {
+        p_limit: assignCount,
+      } as never);
+      if (error) {
+        toast.error(friendlyError(error));
+        return;
+      }
+      const assigned = typeof data === "number" ? data : Number(data ?? 0);
+      if (!assigned) {
+        toast.info('No unassigned "Yes" leads available to assign right now.');
+      } else if (assigned < assignCount) {
+        toast.success(
+          `Assigned ${assigned} lead${assigned === 1 ? "" : "s"} to you — only ${assigned} were available.`,
+        );
+      } else {
+        toast.success(`Assigned ${assigned} leads to you.`);
+      }
+      qc.invalidateQueries({ queryKey: ["raw-lead-cache"] });
+      qc.invalidateQueries({ queryKey: ["raw-lead-counts"] });
+    } finally {
+      setBulkAssigning(false);
+    }
+  }, [assignCount, bulkAssigning, currentUserId, qc]);
+
   const unassignFromSelf = useCallback(
     async (entry: CacheEntry) => {
       if (!currentUserId) {
@@ -1486,6 +1525,40 @@ function Inner() {
               <Layers className="h-3.5 w-3.5 mr-1.5" />
               Move duplicates → Duplicate
             </Button>
+          )}
+
+          {tab === "new" && (
+            <div className="inline-flex items-center gap-1.5">
+              <Select
+                value={String(assignCount)}
+                onValueChange={(v) => setAssignCount(Number(v))}
+              >
+                <SelectTrigger className="h-9 w-[72px] text-[12px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[10, 20, 30, 50].map((n) => (
+                    <SelectItem key={n} value={String(n)}>
+                      {n}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                className="h-9"
+                onClick={() => void bulkAssignYesLeads()}
+                disabled={bulkAssigning || !currentUserId}
+                title={`Assign the next ${assignCount} unclaimed "Yes" leads to you`}
+              >
+                {bulkAssigning ? (
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                )}
+                Assign {assignCount} to me
+              </Button>
+            </div>
           )}
 
           <div className="ml-auto flex items-center gap-2">
