@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import type { AuthState } from "@/hooks/use-auth";
 import jellybeanLogo from "@/assets/jellybean-logo.png";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function AccessCodeGate({ auth }: { auth: AuthState }) {
   const navigate = useNavigate();
@@ -81,6 +82,7 @@ export function AccessCodeGate({ auth }: { auth: AuthState }) {
 
   return (
     <div className="min-h-screen bg-background px-4 py-8 flex items-center justify-center">
+      <ThemeToggle className="fixed right-4 top-4 z-20 h-10 w-10 justify-center border border-border bg-card/80 p-0 shadow-sm backdrop-blur-xl [&>span]:hidden" />
       <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_22%_14%,color-mix(in_oklch,var(--primary)_18%,transparent),transparent_30rem)]" />
       <div className="w-full max-w-md rounded-[28px] border border-border bg-card/90 shadow-lg backdrop-blur-xl p-8 animate-fade-in-up">
         <div className="flex items-center gap-3 mb-6">

@@ -15,15 +15,13 @@ export function PageHeader({
   return (
     <div
       className={cn(
-        "crm-page-header crm-enter flex items-center justify-between gap-4 px-5 md:px-7 py-5 mx-3 md:mx-5 mt-3 md:mt-5 rounded-[28px]",
+        "crm-page-header crm-enter flex items-center justify-between gap-4 px-5 md:px-7 py-5 mx-3 md:mx-5 mt-3 md:mt-5",
         className,
       )}
     >
       <div className="min-w-0">
         <h1 className="crm-page-title">{title}</h1>
-        {description && (
-          <p className="crm-page-subtitle mt-1.5 max-w-3xl">{description}</p>
-        )}
+        {description && <p className="crm-page-subtitle mt-1.5 max-w-3xl">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
     </div>
@@ -38,8 +36,8 @@ export function PageBody({
   className?: string;
 }) {
   return (
-    <div className={cn("crm-page-body crm-enter px-3 md:px-5 pb-5 pt-4", className)}>
-      <div className="rounded-[32px] px-1 py-2 md:px-1 md:py-3">{children}</div>
+    <div className={cn("crm-page-body crm-enter px-3 md:px-5 pb-6 pt-4", className)}>
+      <div className="px-0.5 py-1 md:py-2">{children}</div>
     </div>
   );
 }

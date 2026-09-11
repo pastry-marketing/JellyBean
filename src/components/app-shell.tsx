@@ -27,7 +27,6 @@ import { useRealtimeSync } from "@/hooks/use-realtime-sync";
 import type { AppRole, AuthState } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
 import { useClockSkew } from "@/hooks/use-clock-skew";
-import jellybeanLogo from "@/assets/jellybean-logo.png";
 import { ChangePasswordDialog } from "@/components/auth/change-password-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -177,27 +176,25 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
 
   return (
     <div className="crm-app-shell flex h-screen overflow-hidden bg-background text-foreground">
-      <aside className="crm-sidebar-shell hidden w-[236px] shrink-0 text-sidebar-foreground lg:flex flex-col h-full">
-        <div className="px-5 pt-5 pb-4">
+      <aside className="crm-sidebar-shell hidden w-[252px] shrink-0 text-sidebar-foreground lg:flex flex-col h-full">
+        <div className="shrink-0 border-b border-sidebar-border px-5 py-5">
           <div className="flex items-center justify-start gap-2.5">
-            <img
-              src={jellybeanLogo}
-              alt="JellyBean"
-              className="h-10 w-10 object-contain shrink-0"
-            />
+            <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[15px] border border-border bg-card shadow-sm">
+              <img src="/favicon.svg?v=2" alt="JellyBean" className="h-10 w-10 object-contain" />
+            </div>
             <div className="leading-tight">
-              <div className="text-[14px] font-bold tracking-[-0.015em] text-white">JellyBean</div>
-              <div className="text-[11px] font-medium tracking-[0.02em] uppercase text-white/50">
-                CRM
+              <div className="text-[15px] font-bold tracking-[-0.025em] text-sidebar-accent-foreground">JellyBean</div>
+              <div className="mt-1 text-[10px] font-semibold tracking-[0.12em] uppercase text-sidebar-foreground/60">
+                Operations CRM
               </div>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 min-h-0 px-3 py-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-3 py-4 space-y-1 overflow-y-auto overscroll-contain">
           {navigationGroups.map((group) => (
             <div key={group.label} className="space-y-1 pb-3">
-              <div className="px-3 pb-2 pt-1 text-[10px] uppercase tracking-[0.14em] text-white/40 font-bold">
+              <div className="px-3 pb-2 pt-1 text-[10px] uppercase tracking-[0.14em] text-sidebar-foreground/55 font-bold">
                 {group.label}
               </div>
               {group.items.map((item) => {
@@ -215,13 +212,13 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                     to={item.to}
                     title={item.label}
                     className={cn(
-                      "group crm-motion relative flex h-11 items-center justify-start gap-3 px-3 rounded-2xl text-[13px] tracking-[-0.005em]",
+                      "group crm-motion relative flex h-10 items-center justify-start gap-3 px-3 rounded-xl text-[13px] tracking-[-0.005em]",
                       shouldBlinkCrisp &&
                         "animate-pulse bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.35)]",
                       active
-                        ? "crm-sidebar-active text-white font-semibold"
+                        ? "crm-sidebar-active font-semibold"
                         : !shouldBlinkCrisp &&
-                            "text-sidebar-foreground/72 font-medium hover:bg-white/[0.10] hover:text-white",
+                            "text-sidebar-foreground font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                     )}
                   >
                     <div className="relative flex items-center justify-center">
@@ -229,10 +226,10 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                         className={cn(
                           "h-[16px] w-[16px] crm-motion",
                           active
-                            ? "text-white"
+                            ? "text-inherit"
                             : shouldBlinkCrisp
                               ? "text-emerald-300"
-                              : "text-white/60 group-hover:text-white",
+                              : "text-sidebar-foreground/70 group-hover:text-sidebar-accent-foreground",
                         )}
                       />
                     </div>
@@ -253,7 +250,7 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                       <kbd
                         className={cn(
                           "inline-flex crm-motion opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded font-mono",
-                          active ? "bg-white/15 text-white" : "bg-white/10 text-white/60",
+                          active ? "bg-white/15 text-inherit" : "bg-muted text-sidebar-foreground/60",
                         )}
                       >
                         {item.shortcut}
@@ -267,18 +264,18 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
         </nav>
 
         <div className="px-3 pb-3 flex flex-col gap-1.5">
-          <ThemeToggle className="group crm-motion relative flex h-11 w-full items-center justify-start gap-3 px-3 rounded-2xl text-[13px] tracking-[-0.005em] text-sidebar-foreground/72 font-medium hover:bg-white/[0.10] hover:text-white focus:ring-0 focus:ring-offset-0" />
+          <ThemeToggle className="group crm-motion relative flex h-10 w-full items-center justify-start gap-3 px-3 rounded-xl text-[13px] tracking-[-0.005em] text-sidebar-foreground font-medium hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus:ring-0 focus:ring-offset-0" />
         </div>
         <div className="mt-auto p-3">
-          <div className="flex items-center justify-start gap-2.5 rounded-[22px] bg-sidebar-accent/72 border border-white/[0.10] shadow-sm p-2.5 overflow-hidden">
-            <div className="h-9 w-9 shrink-0 rounded-full bg-primary grid place-items-center text-[12px] font-bold text-white shadow-sm">
+          <div className="flex items-center justify-start gap-2.5 rounded-2xl bg-sidebar-accent/70 border border-sidebar-border shadow-sm p-2.5 overflow-hidden">
+            <div className="h-9 w-9 shrink-0 rounded-xl bg-primary grid place-items-center text-[12px] font-bold text-primary-foreground shadow-sm">
               {initials(auth.profile?.full_name, auth.user?.email)}
             </div>
             <div className="flex min-w-0 flex-1 flex-col justify-center">
-              <div className="text-[13px] font-bold tracking-tight truncate text-white leading-none mb-1.5">
+              <div className="text-[13px] font-bold tracking-tight truncate text-sidebar-accent-foreground leading-none mb-1.5">
                 {displayName}
               </div>
-              <div className="text-[11px] font-medium uppercase text-white/52 capitalize flex items-center gap-1.5 leading-none">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-sidebar-foreground capitalize flex items-center gap-1.5 leading-none">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
                 <span className="truncate">{roleLabel(auth.primaryRole)}</span>
               </div>
@@ -289,7 +286,7 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                 onClick={() => setPasswordDialogOpen(true)}
                 title="Change Password"
                 aria-label="Change Password"
-                className="crm-motion h-8 w-8 grid place-items-center rounded-xl text-white/55 hover:bg-white/10 hover:text-white transition-colors"
+                className="crm-motion h-8 w-8 grid place-items-center rounded-lg text-sidebar-foreground hover:bg-background/50 hover:text-sidebar-accent-foreground transition-colors"
               >
                 <KeyRound className="h-4 w-4" />
               </button>
@@ -297,7 +294,7 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                 onClick={() => void auth.signOut()}
                 title="Sign out"
                 aria-label="Sign out"
-                className="crm-motion h-8 w-8 grid place-items-center rounded-xl text-white/55 hover:bg-destructive/15 hover:text-white transition-colors"
+                className="crm-motion h-8 w-8 grid place-items-center rounded-lg text-sidebar-foreground hover:bg-destructive/15 hover:text-destructive transition-colors"
               >
                 <LogOut className="h-4 w-4" />
               </button>
@@ -310,16 +307,16 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
           side="left"
           className="crm-sidebar-shell flex h-full w-[min(86vw,320px)] flex-col border-0 p-0 text-sidebar-foreground"
         >
-          <SheetHeader className="border-b border-white/10 px-5 py-5 text-left">
-            <SheetTitle className="flex items-center gap-2.5 text-white">
-              <img src={jellybeanLogo} alt="" className="h-9 w-9 object-contain" />
+          <SheetHeader className="border-b border-sidebar-border px-5 py-5 text-left">
+            <SheetTitle className="flex items-center gap-2.5 text-sidebar-accent-foreground">
+              <img src="/favicon.svg?v=2" alt="" className="h-10 w-10 object-contain" />
               <span>JellyBean CRM</span>
             </SheetTitle>
           </SheetHeader>
           <nav aria-label="Main navigation" className="flex-1 overflow-y-auto space-y-1 px-3 py-4">
             {navigationGroups.map((group) => (
               <div key={group.label} className="space-y-1 pb-3">
-                <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/40">
+                <div className="px-3 pb-2 text-[10px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/55">
                   {group.label}
                 </div>
                 {group.items.map((item) => {
@@ -335,10 +332,10 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                       to={item.to}
                       onClick={() => setMobileNavOpen(false)}
                       className={cn(
-                        "flex h-11 items-center gap-3 rounded-2xl px-3 text-[14px] font-medium",
+                        "flex h-11 items-center gap-3 rounded-xl px-3 text-[14px] font-medium",
                         active
-                          ? "crm-sidebar-active text-white"
-                          : "text-sidebar-foreground/75 hover:bg-white/[0.10] hover:text-white",
+                          ? "crm-sidebar-active"
+                          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
                       )}
                     >
                       <Icon className="h-4 w-4 shrink-0" />
@@ -354,12 +351,12 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
               </div>
             ))}
           </nav>
-          <div className="border-t border-white/10 p-3 space-y-1.5">
-            <ThemeToggle className="flex h-11 w-full items-center justify-start gap-3 rounded-2xl px-3 text-[14px] text-sidebar-foreground/75 hover:bg-white/[0.10] hover:text-white" />
+          <div className="border-t border-sidebar-border p-3 space-y-1.5">
+            <ThemeToggle className="flex h-11 w-full items-center justify-start gap-3 rounded-xl px-3 text-[14px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" />
             <button
               type="button"
               onClick={() => void auth.signOut()}
-              className="flex h-11 w-full items-center gap-3 rounded-2xl px-3 text-[14px] text-sidebar-foreground/75 hover:bg-destructive/15 hover:text-white"
+              className="flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[14px] text-sidebar-foreground hover:bg-destructive/15 hover:text-destructive"
             >
               <LogOut className="h-4 w-4" /> Sign out
             </button>
@@ -367,7 +364,7 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
         </SheetContent>
       </Sheet>
       <main className="flex-1 min-w-0 h-full overflow-y-auto overflow-x-hidden bg-background">
-        <div className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/70 bg-background/88 px-4 backdrop-blur lg:hidden">
+        <div className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/80 px-4 backdrop-blur-xl lg:hidden">
           <button
             type="button"
             onClick={() => setMobileNavOpen(true)}
@@ -377,7 +374,7 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
             <Menu className="h-5 w-5" />
             <span>Menu</span>
           </button>
-          <img src={jellybeanLogo} alt="JellyBean" className="h-8 w-8 object-contain" />
+          <img src="/favicon.svg?v=2" alt="JellyBean" className="h-8 w-8 object-contain" />
           <ThemeToggle className="h-10 w-10 p-0 [&>span]:hidden" />
         </div>
         {skewSeconds !== null && (

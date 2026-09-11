@@ -10,6 +10,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { bootstrapFirstAdmin } from "@/lib/admin-users.functions";
 import { friendlyError } from "@/lib/error-messages";
 import jellybeanLogo from "@/assets/jellybean-logo.png";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/setup")({
   component: SetupPage,
@@ -90,6 +91,7 @@ function SetupPage() {
 
   return (
     <div className="min-h-screen bg-background px-4 py-8 flex items-center justify-center">
+      <ThemeToggle className="fixed right-4 top-4 z-20 h-10 w-10 justify-center border border-border bg-card/80 p-0 shadow-sm backdrop-blur-xl [&>span]:hidden" />
       <div className="w-full max-w-5xl grid overflow-hidden rounded-[28px] border border-border/80 bg-card/95 shadow-[0_32px_90px_-50px_rgba(0,0,0,0.45)] backdrop-blur-xl md:grid-cols-[0.92fr_1fr] animate-fade-in-up">
         <section className="hidden md:flex flex-col justify-between bg-primary p-9 text-primary-foreground">
           <div>

@@ -63,7 +63,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { PageHeader, RoleGate } from "@/components/page";
+import { RoleGate } from "@/components/page";
 
 export const Route = createFileRoute("/app/crisp-chat")({
   component: CrispChatPage,
@@ -308,12 +308,13 @@ function CrispChatPage() {
   const auth = useAuth();
   return (
     <div className="h-full w-full min-h-0 flex flex-col overflow-hidden bg-background text-foreground">
-      <PageHeader
-        title="Crisp Chat Inbox"
-        description="Unified multi-workspace customer support portal."
-        className="shrink-0 my-2 py-3 px-4 md:px-5"
-      />
-      <div className="flex-1 min-h-0 overflow-hidden flex flex-col px-3 md:px-5 pb-3">
+      <header className="flex h-[76px] shrink-0 items-center border-b border-border bg-card/30 px-4 backdrop-blur-xl md:px-6">
+        <div className="min-w-0">
+          <h1 className="font-display text-xl font-bold tracking-[-0.025em] md:text-2xl">Crisp Chat Inbox</h1>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground md:text-sm">Unified multi-workspace customer support portal.</p>
+        </div>
+      </header>
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col p-3 md:p-4">
         <RoleGate
           allow={["admin", "cs_admin", "cs"]}
           current={auth.primaryRole}
@@ -1232,7 +1233,7 @@ function CrispInboxInner() {
   };
 
   return (
-    <div className="h-full min-h-0 flex-1 w-full flex overflow-hidden border border-border/40 rounded-2xl bg-card/20 shadow-sm">
+    <div className="h-full min-h-0 flex-1 w-full flex overflow-hidden border border-border rounded-2xl bg-card/35 shadow-[inset_0_1px_0_var(--glass-line),var(--glass-shadow)] backdrop-blur-xl">
       {/* ========================================================================= */}
       {/* COLUMN 1: CRISP WORKSPACES (~220px) */}
       {/* ========================================================================= */}
