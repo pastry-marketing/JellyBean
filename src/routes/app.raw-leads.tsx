@@ -40,6 +40,12 @@ import {
 import type { LeadFormValues } from "@/components/lead-form";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Loader2,
   ExternalLink,
   RefreshCw,
@@ -60,6 +66,7 @@ import {
   UserMinus,
   UserPlus,
   Layers,
+  ChevronDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
@@ -1528,25 +1535,11 @@ function Inner() {
           )}
 
           {tab === "new" && (
-            <div className="inline-flex items-center gap-1.5">
-              <Select
-                value={String(assignCount)}
-                onValueChange={(v) => setAssignCount(Number(v))}
-              >
-                <SelectTrigger className="h-9 w-[72px] text-[12px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {[10, 20, 30, 50].map((n) => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="inline-flex">
               <Button
                 size="sm"
-                className="h-9"
+                variant="outline"
+                className="h-9 rounded-r-none border-r-0"
                 onClick={() => void bulkAssignYesLeads()}
                 disabled={bulkAssigning || !currentUserId}
                 title={`Assign the next ${assignCount} unclaimed "Yes" leads to you`}
@@ -1558,6 +1551,30 @@ function Inner() {
                 )}
                 Assign {assignCount} to me
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-9 rounded-l-none px-1.5"
+                    disabled={bulkAssigning || !currentUserId}
+                    aria-label="Choose how many leads to assign"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[9rem]">
+                  {[10, 20, 30, 50].map((n) => (
+                    <DropdownMenuItem
+                      key={n}
+                      onClick={() => setAssignCount(n)}
+                      className="text-[12.5px]"
+                    >
+                      Assign {n} to me
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
 
