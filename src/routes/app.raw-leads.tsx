@@ -1673,10 +1673,8 @@ function Inner() {
                     ? `Auto-checking ${uncheckedCount} leads…`
                     : `Check ${aiTargets.length || 50} Lead${aiTargets.length === 1 ? "" : "s"}`}
               </Button>
-              <p className="px-1 text-[11px] leading-snug text-muted-foreground">
-                {autoActive
-                  ? "Auto-checking 50 at a time — locked until fewer than 50 unchecked leads remain."
-                  : "Auto-checks on its own when 50+ unchecked leads are loaded. Use this button for smaller batches."}
+              <p className="px-1 text-[11px] leading-snug text-muted-foreground lg:w-[210px]">
+                {autoActive ? "Locked until under 50 left." : "Auto-runs at 50+ unchecked."}
               </p>
             </div>
           </div>
