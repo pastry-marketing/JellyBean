@@ -817,6 +817,35 @@ function Inner() {
     placeholderData: keepPreviousData,
   });
 
+  // Map of user id → display name so admins/sub-admins can see which user a
+  // lead is assigned to (including after it's moved to another section).
+  // Only admins/sub-admins can read other users' profiles (RLS), so the query
+  // is enabled for them alone; everyone else keeps the plain "Claimed" label.
+  const assigneeNamesQuery = useQuery({
+    queryKey: ["raw-lead-assignee-names"],
+    enabled: isAdmin,
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, username, email");
+      if (error) throw error;
+      const map = new Map<string, string>();
+      for (const p of (data ?? []) as Array<{
+        user_id: string;
+        full_name: string | null;
+        username: string | null;
+        email: string | null;
+      }>) {
+        if (p.user_id) map.set(p.user_id, p.full_name || p.username || p.email || "Unknown user");
+      }
+      return map;
+    },
+  });
+  const assigneeNameFor = (userId: string | null | undefined) =>
+    (userId && assigneeNamesQuery.data?.get(userId)) || null;
+
   const exactCountQuery = countsQuery;
   const exactCount = isUnfiltered ? countsQuery.data?.[tab] : undefined;
   const totalPages =
@@ -1957,8 +1986,11 @@ function Inner() {
                             </Button>
                           </div>
                         ) : claimedByOther ? (
-                          <span className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-muted-foreground text-[10.5px] font-medium border border-border">
-                            Claimed
+                          <span
+                            className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-muted-foreground text-[10.5px] font-medium border border-border max-w-[160px] truncate"
+                            title={assigneeNameFor(e.assigned_to) ?? "Claimed"}
+                          >
+                            {assigneeNameFor(e.assigned_to) ?? "Claimed"}
                           </span>
                         ) : (
                           <Button
