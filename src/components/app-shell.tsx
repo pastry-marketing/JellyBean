@@ -176,7 +176,7 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
 
   return (
     <div className="crm-app-shell flex h-screen overflow-hidden bg-background text-foreground">
-      <aside className="crm-sidebar-shell hidden w-[252px] shrink-0 text-sidebar-foreground lg:flex flex-col h-full">
+      <aside className="crm-sidebar-shell relative hidden w-[252px] shrink-0 text-sidebar-foreground lg:flex flex-col h-full">
         <div className="shrink-0 border-b border-sidebar-border px-5 py-5">
           <div className="flex items-center justify-start gap-2.5">
             <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-[15px] border border-border bg-card shadow-sm">
