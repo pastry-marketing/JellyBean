@@ -56,7 +56,12 @@ import { DocumentationTab } from "@/components/settings/documentation-tab";
 import { CrmUpdatesTab } from "@/components/settings/crm-updates-tab";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
-import { adminCreateUser, adminResetPassword, adminSetActive } from "@/lib/admin-users.functions";
+import {
+  adminCreateUser,
+  adminResetPassword,
+  adminSetActive,
+  adminSetRole,
+} from "@/lib/admin-users.functions";
 import { adminDeleteUser } from "@/lib/login-otp.functions";
 import { cn } from "@/lib/utils";
 
@@ -503,7 +508,32 @@ function UserRowItem({ user, onChange }: { user: UserRow; onChange: () => void }
   const setActive = useServerFn(adminSetActive);
   const resetPw = useServerFn(adminResetPassword);
   const deleteUser = useServerFn(adminDeleteUser);
+  const setRole = useServerFn(adminSetRole);
   const [busy, setBusy] = useState(false);
+
+  type RoleValue =
+    | "admin"
+    | "sub_admin"
+    | "maturing"
+    | "cs"
+    | "cs_admin"
+    | "acc_handler"
+    | "facebook"
+    | "seo";
+
+  async function changeRole(next: RoleValue) {
+    if (next === user.role) return;
+    setBusy(true);
+    try {
+      await setRole({ data: { userId: user.user_id, role: next } });
+      toast.success(`Role updated to ${roleLabel(next)}`);
+      onChange();
+    } catch (e) {
+      toast.error(friendlyError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showResetPw, setShowResetPw] = useState(false);
   const [showResetPwValue, setShowResetPwValue] = useState(false);
@@ -559,7 +589,27 @@ function UserRowItem({ user, onChange }: { user: UserRow; onChange: () => void }
       <td className="font-medium">{user.full_name || "-"}</td>
       <td className="font-mono text-xs">{user.username ?? "-"}</td>
       <td>{user.email}</td>
-      <td className="capitalize">{roleLabel(user.role)}</td>
+      <td>
+        <Select
+          value={user.role ?? undefined}
+          onValueChange={(v) => void changeRole(v as RoleValue)}
+          disabled={busy}
+        >
+          <SelectTrigger className="h-8 w-[150px] text-[12px] capitalize">
+            <SelectValue placeholder="Set role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="sub_admin">Sub-admin</SelectItem>
+            <SelectItem value="maturing">Maturing</SelectItem>
+            <SelectItem value="cs">CS</SelectItem>
+            <SelectItem value="cs_admin">CS Admin</SelectItem>
+            <SelectItem value="acc_handler">Acc Handler</SelectItem>
+            <SelectItem value="facebook">Facebook</SelectItem>
+            <SelectItem value="seo">SEO</SelectItem>
+          </SelectContent>
+        </Select>
+      </td>
       <td>
         <AccessCodeCell user={user} onChange={onChange} />
       </td>

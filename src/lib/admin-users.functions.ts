@@ -136,6 +136,91 @@ export const adminSetActive = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+// Admin-only role change. Admins may set any user to any role. Replaces the
+// user's role set with the single chosen role, refuses to demote the last
+// remaining admin, and back-fills an access code when switching a user to a
+// non-admin role (non-admins sign in with the 6-digit code screen).
+export const adminSetRole = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ userId: z.string().uuid(), role: roleSchema }).parse(input),
+  )
+  .handler(async ({ data, context }) => {
+    await ensureRequesterIsAdmin(context.userId);
+
+    const { data: currentRoles, error: curErr } = await supabaseAdmin
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", data.userId);
+    if (curErr) throw new Error(curErr.message);
+    const roles = (currentRoles ?? []).map((r) => String(r.role));
+
+    // Already exactly this single role — nothing to do.
+    if (roles.length === 1 && roles[0] === data.role) {
+      return { ok: true, unchanged: true };
+    }
+
+    // Never leave the system without an admin.
+    if (roles.includes("admin") && data.role !== "admin") {
+      const { count, error: cntErr } = await supabaseAdmin
+        .from("user_roles")
+        .select("user_id", { count: "exact", head: true })
+        .eq("role", "admin");
+      if (cntErr) throw new Error(cntErr.message);
+      if ((count ?? 0) <= 1) {
+        throw new Error("Cannot change the role of the last remaining admin.");
+      }
+    }
+
+    // Add the new role first (so there's never a role-less gap), then drop the
+    // rest. Insert only when it isn't already present to avoid unique conflicts.
+    if (!roles.includes(data.role)) {
+      const { error: insErr } = await supabaseAdmin
+        .from("user_roles")
+        .insert({ user_id: data.userId, role: data.role });
+      if (insErr) throw new Error(insErr.message);
+    }
+    const { error: delErr } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", data.userId)
+      .neq("role", data.role);
+    if (delErr) throw new Error(delErr.message);
+
+    // Non-admins log in via the access-code screen; make sure they have one.
+    if (data.role !== "admin") {
+      const { data: existingCode } = await supabaseAdmin
+        .from("user_access_codes")
+        .select("user_id")
+        .eq("user_id", data.userId)
+        .maybeSingle();
+      if (!existingCode) {
+        const code = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+        const { error: codeErr } = await supabaseAdmin
+          .from("user_access_codes")
+          .upsert(
+            { user_id: data.userId, code, verified_session_id: null },
+            { onConflict: "user_id" },
+          );
+        if (codeErr) {
+          console.error("[admin-users] Failed to seed access code on role change:", codeErr.message);
+        }
+      }
+    }
+
+    await logActivity({
+      supabaseAdmin,
+      actorId: context.userId,
+      actorName: await loadActorName(context.userId),
+      actorRole: "admin",
+      action: "set_user_role",
+      entityType: "user_roles",
+      metadata: { targetUserId: data.userId, role: data.role, previousRoles: roles },
+    });
+
+    return { ok: true };
+  });
+
 // Admin-only password reset (sets a new password directly)
 export const adminResetPassword = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
