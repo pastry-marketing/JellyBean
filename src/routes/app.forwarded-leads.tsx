@@ -723,7 +723,14 @@ function ForwardedTable({
                         is_unassigned: !r.assigned_to,
                       });
                     }}
-                    title={r.assigned_to ? "Send reminder to assigned CS" : "Send reminder to all CS users"}
+                    disabled={r.cs_status === "converted"}
+                    title={
+                      r.cs_status === "converted"
+                        ? "Processed leads can't receive reminders"
+                        : r.assigned_to
+                          ? "Send reminder to assigned CS"
+                          : "Send reminder to all CS users"
+                    }
                   >
                     <Bell className="h-3.5 w-3.5" />
                   </Button>

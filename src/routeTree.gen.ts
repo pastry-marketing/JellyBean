@@ -26,6 +26,7 @@ import { Route as AppGoogleSheetsRouteImport } from './routes/app.google-sheets'
 import { Route as AppLeadAssignmentRouteImport } from './routes/app.lead-assignment'
 import { Route as AppLogsRouteImport } from './routes/app.logs'
 import { Route as AppMapRouteImport } from './routes/app.map'
+import { Route as AppPendingLeadsRouteImport } from './routes/app.pending-leads'
 import { Route as AppRawLeadsRouteImport } from './routes/app.raw-leads'
 import { Route as AppReportsRouteImport } from './routes/app.reports'
 import { Route as AppSettingsRouteImport } from './routes/app.settings'
@@ -117,6 +118,11 @@ const AppMapRoute = AppMapRouteImport.update({
   path: '/map',
   getParentRoute: () => AppRoute,
 } as any)
+const AppPendingLeadsRoute = AppPendingLeadsRouteImport.update({
+  id: '/pending-leads',
+  path: '/pending-leads',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppRawLeadsRoute = AppRawLeadsRouteImport.update({
   id: '/raw-leads',
   path: '/raw-leads',
@@ -160,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/app/lead-assignment': typeof AppLeadAssignmentRoute
   '/app/logs': typeof AppLogsRoute
   '/app/map': typeof AppMapRoute
+  '/app/pending-leads': typeof AppPendingLeadsRoute
   '/app/raw-leads': typeof AppRawLeadsRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/app/lead-assignment': typeof AppLeadAssignmentRoute
   '/app/logs': typeof AppLogsRoute
   '/app/map': typeof AppMapRoute
+  '/app/pending-leads': typeof AppPendingLeadsRoute
   '/app/raw-leads': typeof AppRawLeadsRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
@@ -208,6 +216,7 @@ export interface FileRoutesById {
   '/app/lead-assignment': typeof AppLeadAssignmentRoute
   '/app/logs': typeof AppLogsRoute
   '/app/map': typeof AppMapRoute
+  '/app/pending-leads': typeof AppPendingLeadsRoute
   '/app/raw-leads': typeof AppRawLeadsRoute
   '/app/reports': typeof AppReportsRoute
   '/app/settings': typeof AppSettingsRoute
@@ -234,6 +243,7 @@ export interface FileRouteTypes {
     | '/app/lead-assignment'
     | '/app/logs'
     | '/app/map'
+    | '/app/pending-leads'
     | '/app/raw-leads'
     | '/app/reports'
     | '/app/settings'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/app/lead-assignment'
     | '/app/logs'
     | '/app/map'
+    | '/app/pending-leads'
     | '/app/raw-leads'
     | '/app/reports'
     | '/app/settings'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
     | '/app/lead-assignment'
     | '/app/logs'
     | '/app/map'
+    | '/app/pending-leads'
     | '/app/raw-leads'
     | '/app/reports'
     | '/app/settings'
@@ -419,6 +431,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppMapRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/pending-leads': {
+      id: '/app/pending-leads'
+      path: '/pending-leads'
+      fullPath: '/app/pending-leads'
+      preLoaderRoute: typeof AppPendingLeadsRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/raw-leads': {
       id: '/app/raw-leads'
       path: '/raw-leads'
@@ -469,6 +488,7 @@ interface AppRouteChildren {
   AppLeadAssignmentRoute: typeof AppLeadAssignmentRoute
   AppLogsRoute: typeof AppLogsRoute
   AppMapRoute: typeof AppMapRoute
+  AppPendingLeadsRoute: typeof AppPendingLeadsRoute
   AppRawLeadsRoute: typeof AppRawLeadsRoute
   AppReportsRoute: typeof AppReportsRoute
   AppSettingsRoute: typeof AppSettingsRoute
@@ -488,6 +508,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppLeadAssignmentRoute: AppLeadAssignmentRoute,
   AppLogsRoute: AppLogsRoute,
   AppMapRoute: AppMapRoute,
+  AppPendingLeadsRoute: AppPendingLeadsRoute,
   AppRawLeadsRoute: AppRawLeadsRoute,
   AppReportsRoute: AppReportsRoute,
   AppSettingsRoute: AppSettingsRoute,

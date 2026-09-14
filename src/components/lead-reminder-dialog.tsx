@@ -61,11 +61,7 @@ export function LeadReminderDialog({
       )("send_lead_reminder", { _lead_id: lead.id, _message: trimmed });
       if (error) throw new Error(error.message);
       const count = data?.recipient_count ?? 0;
-      if (lead.is_unassigned) {
-        toast.success(`Reminder sent to ${count} active CS user${count === 1 ? "" : "s"}.`);
-      } else {
-        toast.success(`Reminder sent to ${lead.assignee_name ?? "assigned CS user"}.`);
-      }
+      toast.success(`Reminder sent to ${count} recipient${count === 1 ? "" : "s"}.`);
       setNote("");
       onOpenChange(false);
     } catch (err) {
@@ -99,11 +95,10 @@ export function LeadReminderDialog({
             <div className="rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-[12.5px] space-y-1">
               <Row label="Customer" value={lead.customer_name} />
               <Row label="Phone" value={formatPhone(lead.customer_number) || lead.customer_number} />
-              {lead.is_unassigned ? (
-                <Row label="Recipient" value="All CS Users" />
-              ) : (
-                <Row label="Assigned CS" value={lead.assignee_name ?? "—"} />
-              )}
+              <Row
+                label="Recipient"
+                value={lead.is_unassigned ? "All CS users" : "Assigned CS + CS admins"}
+              />
             </div>
 
 

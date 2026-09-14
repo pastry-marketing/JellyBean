@@ -17,6 +17,7 @@ import {
   MessageSquare,
   Menu,
   FileSpreadsheet,
+  BellRing,
 } from "lucide-react";
 
 import { CrmUpdatesNotifier } from "@/components/crm-updates-notifier";
@@ -32,6 +33,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useState } from "react";
 import { useCrispUnread } from "@/hooks/use-crisp-unread";
+import { usePendingReminders } from "@/hooks/use-pending-reminders";
 
 type Item = {
   to: string;
@@ -47,10 +49,17 @@ const CRISP_ITEM: Item = {
   shortcut: "C",
 };
 
+const PENDING_ITEM: Item = {
+  to: "/app/pending-leads",
+  label: "Pending leads",
+  icon: BellRing,
+};
+
 const ADMIN: Item[] = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, shortcut: "D" },
   { to: "/app/raw-leads", label: "Raw Leads", icon: Table2, shortcut: "L" },
   { to: "/app/cs-leads", label: "CS Pipeline", icon: Headphones, shortcut: "P" },
+  { to: "/app/pending-leads", label: "Pending leads", icon: BellRing },
   { to: "/app/crisp-chat", label: "Crisp Chat", icon: MessageSquare, shortcut: "C" },
   { to: "/app/browser-profiles", label: "Browser Profiles", icon: Globe, shortcut: "B" },
   { to: "/app/map", label: "Map", icon: Map, shortcut: "M" },
@@ -73,10 +82,15 @@ const MATURING: Item[] = [
   { to: "/app/submit-lead", label: "Manual Lead", icon: Send },
 ];
 
-const CS: Item[] = [{ to: "/app/cs-leads", label: "Dashboard", icon: LayoutDashboard }, CRISP_ITEM];
+const CS: Item[] = [
+  { to: "/app/cs-leads", label: "Dashboard", icon: LayoutDashboard },
+  PENDING_ITEM,
+  CRISP_ITEM,
+];
 
 const CS_ADMIN_ITEMS: Item[] = [
   { to: "/app/cs-leads", label: "CS Pipeline", icon: Headphones },
+  PENDING_ITEM,
   CRISP_ITEM,
   { to: "/app/lead-assignment", label: "Lead Assignment", icon: PieChart },
 ];
@@ -104,6 +118,7 @@ const ADMIN_FULL: Item[] = [
 const SUB_ADMIN: Item[] = ADMIN_FULL.filter(
   (item) =>
     item.to !== "/app/cs-leads" &&
+    item.to !== "/app/pending-leads" &&
     item.to !== "/app/logs" &&
     item.to !== "/app/settings" &&
     item.to !== "/app/crisp-chat",
@@ -139,7 +154,7 @@ function navigationGroupsForRole(role: AppRole | null): Array<{ label: string; i
     },
     {
       label: "Customer service",
-      paths: ["/app/cs-leads", "/app/crisp-chat", "/app/lead-assignment"],
+      paths: ["/app/cs-leads", "/app/pending-leads", "/app/crisp-chat", "/app/lead-assignment"],
     },
     { label: "Intelligence", paths: ["/app/analytics", "/app/reports"] },
     { label: "Administration", paths: ["/app/logs", "/app/google-sheets", "/app/settings"] },
@@ -171,6 +186,11 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { unreadCount: crispUnreadCount, hasUnread: hasCrispUnread } = useCrispUnread();
+  const { hasPending: hasPendingReminders } = usePendingReminders(
+    auth.primaryRole === "admin" ||
+      auth.primaryRole === "cs" ||
+      auth.primaryRole === "cs_admin",
+  );
 
   useRealtimeSync(auth.primaryRole);
 
@@ -245,6 +265,12 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                       <span className="inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-emerald-500 text-white shadow-sm shrink-0">
                         {crispUnreadCount}
                       </span>
+                    )}
+                    {item.to === "/app/pending-leads" && hasPendingReminders && (
+                      <span
+                        aria-label="Pending reminders"
+                        className="h-2 w-2 shrink-0 rounded-full bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.75)]"
+                      />
                     )}
                     {item.shortcut && !shouldBlinkCrisp && (
                       <kbd
@@ -344,6 +370,12 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                         <span className="rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
                           {crispUnreadCount}
                         </span>
+                      )}
+                      {item.to === "/app/pending-leads" && hasPendingReminders && (
+                        <span
+                          aria-label="Pending reminders"
+                          className="h-2 w-2 shrink-0 rounded-full bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.75)]"
+                        />
                       )}
                     </Link>
                   );
