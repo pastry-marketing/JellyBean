@@ -342,7 +342,7 @@ function Inner() {
             value={sentToday.data}
             sub={isAdmin ? "All users" : "By you"}
           />
-          <Stat label="Total forwarded" value={list.data?.length} />
+          <Stat label="Total forwarded" value={totalCount.data} />
           <Stat
             label="Pending outcome"
             value={(list.data ?? []).filter((r) => r.cs_status === "new").length}
