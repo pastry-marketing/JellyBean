@@ -2634,7 +2634,7 @@ function LeadCard({
         <StatusPicker
           value={status}
           onChange={changeStatus}
-          disabled={saving || (!isAdmin && (!assignedTo || auth.user?.id !== assignedTo))}
+          disabled={saving || (!isAdmin && !isCs && (!assignedTo || auth.user?.id !== assignedTo))}
           saving={saving}
         />
       </div>
@@ -3359,7 +3359,7 @@ function LeadDrawer({
                 <StatusPicker
                   value={status}
                   onChange={setStatus}
-                  disabled={busy || (!isAdmin && (!assignedTo || auth.user?.id !== assignedTo))}
+                  disabled={busy || (!isAdmin && !isCs && (!assignedTo || auth.user?.id !== assignedTo))}
                 />
               </div>
               <div className="flex items-center gap-2 pt-1">
