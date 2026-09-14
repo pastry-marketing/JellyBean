@@ -1083,6 +1083,10 @@ export type Database = {
       }
     }
     Functions: {
+      acknowledge_lead_reminders: {
+        Args: { _lead_id: string }
+        Returns: number
+      }
       adjust_raw_lead_cache_count: {
         Args: { _assigned_to: string; _category_key: string; _delta: number }
         Returns: undefined
@@ -1101,6 +1105,7 @@ export type Database = {
         Args: { _user_id: string }
         Returns: string
       }
+      assign_raw_leads_to_me: { Args: { p_limit: number }; Returns: number }
       batch_update_raw_lead_decisions: {
         Args: { decisions: Json }
         Returns: number
@@ -1115,6 +1120,7 @@ export type Database = {
           id: string
         }[]
       }
+      count_pending_reminder_leads: { Args: never; Returns: number }
       crisp_create_workspace_secret: {
         Args: {
           p_token_id: string
@@ -1230,6 +1236,21 @@ export type Database = {
       }
       is_crisp_masked_content: { Args: { p_content: string }; Returns: boolean }
       is_my_access_verified: { Args: never; Returns: boolean }
+      list_pending_reminder_leads: {
+        Args: never
+        Returns: {
+          assigned_to: string
+          cs_status: string
+          customer_name: string
+          customer_number: string
+          last_message: string
+          last_reminder_at: string
+          lead_id: string
+          main_area: string
+          reminder_count: number
+          sub_area: string
+        }[]
+      }
       list_service_assignments: {
         Args: never
         Returns: {
