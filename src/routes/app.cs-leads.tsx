@@ -1156,14 +1156,11 @@ function Inner() {
 
           qc.invalidateQueries({ queryKey: ["cs_leads"] });
         },
-      )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "qualified_leads" },
-        () => {
-          qc.invalidateQueries({ queryKey: ["cs_leads"] });
-        },
       );
+    // NOTE: qualified_leads UPDATE events are handled globally by
+    // useRealtimeSync (which invalidates ["cs_leads"]). We intentionally do
+    // NOT re-subscribe to UPDATE here — a second binding would double the
+    // Realtime-message billing for every CS user on this page.
     channel.subscribe();
     return () => {
       clearTimeout(t);

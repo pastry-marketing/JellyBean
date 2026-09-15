@@ -185,7 +185,11 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
   const skewSeconds = useClockSkew();
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { unreadCount: crispUnreadCount, hasUnread: hasCrispUnread } = useCrispUnread();
+  const { unreadCount: crispUnreadCount, hasUnread: hasCrispUnread } = useCrispUnread(
+    auth.primaryRole === "admin" ||
+      auth.primaryRole === "cs" ||
+      auth.primaryRole === "cs_admin",
+  );
   const { hasPending: hasPendingReminders } = usePendingReminders(
     auth.primaryRole === "admin" ||
       auth.primaryRole === "cs" ||

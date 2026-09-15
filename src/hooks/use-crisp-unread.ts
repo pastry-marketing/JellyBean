@@ -1,11 +1,12 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
-export function useCrispUnread() {
+export function useCrispUnread(enabled: boolean = true) {
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const isMountedRef = useRef(true);
 
   const fetchUnreadCount = useCallback(async () => {
+    if (!enabled) return;
     try {
       const { data, error } = await supabase.rpc("get_crisp_workspace_summaries");
       if (!error && data && isMountedRef.current) {
@@ -19,10 +20,16 @@ export function useCrispUnread() {
     } catch {
       // Non-fatal if fetch fails
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     isMountedRef.current = true;
+    if (!enabled) {
+      setUnreadCount(0);
+      return () => {
+        isMountedRef.current = false;
+      };
+    }
     void fetchUnreadCount();
 
     const channel = supabase
@@ -61,7 +68,7 @@ export function useCrispUnread() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       void supabase.removeChannel(channel);
     };
-  }, [fetchUnreadCount]);
+  }, [enabled, fetchUnreadCount]);
 
   return {
     unreadCount,

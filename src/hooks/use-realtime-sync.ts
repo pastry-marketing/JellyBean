@@ -21,7 +21,7 @@ const TABLE_QUERY_KEYS: Record<string, string[][]> = {
 const ROLE_TABLES: Record<AppRole, string[]> = {
   admin: ["qualified_leads", "incogniton_profiles", "shared_state"],
   sub_admin: ["qualified_leads", "incogniton_profiles", "shared_state"],
-  scraping: ["qualified_leads", "incogniton_profiles", "shared_state"],
+  scraping: ["incogniton_profiles", "shared_state"],
   maturing: ["qualified_leads", "incogniton_profiles", "shared_state"],
   cs: ["qualified_leads", "shared_state"],
   cs_admin: ["qualified_leads", "shared_state"],
