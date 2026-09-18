@@ -812,8 +812,12 @@ function Inner() {
         duplicate: number;
         assigned_myself: number;
       },
-    staleTime: 60_000,
-    refetchOnWindowFocus: false,
+    staleTime: 20_000,
+    // Auto-refresh the tab badges. Cheap scalar RPC over a materialized view,
+    // and React Query pauses interval refetches while the tab is hidden, so
+    // this only runs while someone is looking at the page (no realtime cost).
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
     placeholderData: keepPreviousData,
   });
 
@@ -885,7 +889,12 @@ function Inner() {
       })) as RawLeadPage,
     placeholderData: keepPreviousData,
     gcTime: Infinity,
-    refetchOnWindowFocus: false,
+    // Auto-refresh the current page so newly scraped leads appear without a
+    // manual refresh. Polling (not realtime) keeps this off the exceeded
+    // Realtime-Messages quota; keepPreviousData avoids flicker and preserves
+    // selection, and background refetches pause while the tab is hidden.
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const [navigating, setNavigating] = useState(false);
