@@ -2,25 +2,16 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireTargetAccess, requireUserManager } from "@/lib/admin-users.functions";
 
-async function ensureRequesterIsAdmin(userId: string) {
-  const { data, error } = await supabaseAdmin
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin only");
-}
-
-// Admin: delete any user (including other admins). Cannot delete self.
+// User managers may only delete accounts inside their delegated role scope.
 export const adminDeleteUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({ userId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
-    await ensureRequesterIsAdmin(context.userId);
+    const actorRole = await requireUserManager(context.userId);
     if (data.userId === context.userId) throw new Error("You cannot delete your own account.");
+    await requireTargetAccess(actorRole, data.userId);
 
     // Hard-delete from auth first. FKs to auth.users(id) are ON DELETE CASCADE
     // for user_roles/profiles, so this removes them too. Explicitly pass

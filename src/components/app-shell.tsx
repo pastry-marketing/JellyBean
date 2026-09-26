@@ -18,6 +18,7 @@ import {
   Menu,
   FileSpreadsheet,
   BellRing,
+  Users,
 } from "lucide-react";
 
 import { CrmUpdatesNotifier } from "@/components/crm-updates-notifier";
@@ -93,6 +94,7 @@ const CS_ADMIN_ITEMS: Item[] = [
   PENDING_ITEM,
   CRISP_ITEM,
   { to: "/app/lead-assignment", label: "Lead Assignment", icon: PieChart },
+  { to: "/app/settings", label: "Users", icon: Users },
 ];
 
 const ACC_HANDLER: Item[] = [
@@ -120,9 +122,8 @@ const SUB_ADMIN: Item[] = ADMIN_FULL.filter(
     item.to !== "/app/cs-leads" &&
     item.to !== "/app/pending-leads" &&
     item.to !== "/app/logs" &&
-    item.to !== "/app/settings" &&
     item.to !== "/app/crisp-chat",
-);
+).map((item) => (item.to === "/app/settings" ? { ...item, label: "Users", icon: Users } : item));
 
 function itemsForRole(role: AppRole | null): Item[] {
   if (role === "admin") return ADMIN_FULL;
@@ -186,14 +187,10 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { unreadCount: crispUnreadCount, hasUnread: hasCrispUnread } = useCrispUnread(
-    auth.primaryRole === "admin" ||
-      auth.primaryRole === "cs" ||
-      auth.primaryRole === "cs_admin",
+    auth.primaryRole === "admin" || auth.primaryRole === "cs" || auth.primaryRole === "cs_admin",
   );
   const { hasPending: hasPendingReminders } = usePendingReminders(
-    auth.primaryRole === "admin" ||
-      auth.primaryRole === "cs" ||
-      auth.primaryRole === "cs_admin",
+    auth.primaryRole === "admin" || auth.primaryRole === "cs" || auth.primaryRole === "cs_admin",
   );
 
   useRealtimeSync(auth.primaryRole);
@@ -207,7 +204,9 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
               <img src="/favicon.svg?v=2" alt="JellyBean" className="h-10 w-10 object-contain" />
             </div>
             <div className="leading-tight">
-              <div className="text-[15px] font-bold tracking-[-0.025em] text-sidebar-accent-foreground">JellyBean</div>
+              <div className="text-[15px] font-bold tracking-[-0.025em] text-sidebar-accent-foreground">
+                JellyBean
+              </div>
               <div className="mt-1 text-[10px] font-semibold tracking-[0.12em] uppercase text-sidebar-foreground/60">
                 Operations CRM
               </div>
@@ -280,7 +279,9 @@ export function AppShell({ auth, children }: { auth: AuthState; children: React.
                       <kbd
                         className={cn(
                           "inline-flex crm-motion opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded font-mono",
-                          active ? "bg-white/15 text-inherit" : "bg-muted text-sidebar-foreground/60",
+                          active
+                            ? "bg-white/15 text-inherit"
+                            : "bg-muted text-sidebar-foreground/60",
                         )}
                       >
                         {item.shortcut}

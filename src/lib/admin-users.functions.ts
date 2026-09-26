@@ -3,17 +3,16 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { logActivity } from "@/lib/activity-log";
+import {
+  USER_MANAGEMENT_ROLES,
+  canManageRole,
+  canManageTargetRoles,
+  manageableRolesFor,
+  resolveUserManagerRole,
+  type UserManagerRole,
+} from "@/lib/user-management-permissions";
 
-const roleSchema = z.enum([
-  "admin",
-  "sub_admin",
-  "maturing",
-  "cs",
-  "cs_admin",
-  "acc_handler",
-  "facebook",
-  "seo",
-]);
+const roleSchema = z.enum(USER_MANAGEMENT_ROLES);
 
 const createUserSchema = z.object({
   fullName: z.string().trim().min(1).max(120),
@@ -39,15 +38,32 @@ function deriveUsername(email: string): string {
   return base;
 }
 
-async function ensureRequesterIsAdmin(userId: string) {
+export async function requireUserManager(userId: string): Promise<UserManagerRole> {
   const { data, error } = await supabaseAdmin
     .from("user_roles")
     .select("role")
-    .eq("user_id", userId)
-    .eq("role", "admin")
-    .maybeSingle();
+    .eq("user_id", userId);
   if (error) throw new Error(error.message);
-  if (!data) throw new Error("Forbidden: admin only");
+  const managerRole = resolveUserManagerRole((data ?? []).map((row) => String(row.role)));
+  if (!managerRole) throw new Error("Forbidden: user management access required");
+  return managerRole;
+}
+
+async function loadTargetRoles(userId: string): Promise<string[]> {
+  const { data, error } = await supabaseAdmin
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => String(row.role));
+}
+
+export async function requireTargetAccess(managerRole: UserManagerRole, targetUserId: string) {
+  const targetRoles = await loadTargetRoles(targetUserId);
+  if (!canManageTargetRoles(managerRole, targetRoles)) {
+    throw new Error("Forbidden: you cannot manage this user's role");
+  }
+  return targetRoles;
 }
 
 async function loadActorName(userId: string) {
@@ -93,13 +109,16 @@ export const adminCreateUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => createUserSchema.parse(input))
   .handler(async ({ data, context }) => {
-    await ensureRequesterIsAdmin(context.userId);
+    const actorRole = await requireUserManager(context.userId);
+    if (!canManageRole(actorRole, data.role)) {
+      throw new Error("Forbidden: you cannot create users with this role");
+    }
     const result = await createUserInternal(data);
     await logActivity({
       supabaseAdmin,
       actorId: context.userId,
       actorName: await loadActorName(context.userId),
-      actorRole: "admin",
+      actorRole,
       action: "create_user",
       entityType: "profiles",
       metadata: { targetUserId: result.userId, role: data.role },
@@ -114,7 +133,8 @@ export const adminSetActive = createServerFn({ method: "POST" })
     z.object({ userId: z.string().uuid(), isActive: z.boolean() }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await ensureRequesterIsAdmin(context.userId);
+    const actorRole = await requireUserManager(context.userId);
+    await requireTargetAccess(actorRole, data.userId);
     const { error } = await supabaseAdmin
       .from("profiles")
       .update({ is_active: data.isActive })
@@ -128,7 +148,7 @@ export const adminSetActive = createServerFn({ method: "POST" })
       supabaseAdmin,
       actorId: context.userId,
       actorName: await loadActorName(context.userId),
-      actorRole: "admin",
+      actorRole,
       action: "set_user_active",
       entityType: "profiles",
       metadata: { targetUserId: data.userId, isActive: data.isActive },
@@ -142,11 +162,12 @@ export const adminSetActive = createServerFn({ method: "POST" })
 // non-admin role (non-admins sign in with the 6-digit code screen).
 export const adminSetRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input) =>
-    z.object({ userId: z.string().uuid(), role: roleSchema }).parse(input),
-  )
+  .inputValidator((input) => z.object({ userId: z.string().uuid(), role: roleSchema }).parse(input))
   .handler(async ({ data, context }) => {
-    await ensureRequesterIsAdmin(context.userId);
+    const actorRole = await requireUserManager(context.userId);
+    if (!canManageRole(actorRole, data.role)) {
+      throw new Error("Forbidden: you cannot assign this role");
+    }
 
     const { data: currentRoles, error: curErr } = await supabaseAdmin
       .from("user_roles")
@@ -154,6 +175,9 @@ export const adminSetRole = createServerFn({ method: "POST" })
       .eq("user_id", data.userId);
     if (curErr) throw new Error(curErr.message);
     const roles = (currentRoles ?? []).map((r) => String(r.role));
+    if (!canManageTargetRoles(actorRole, roles)) {
+      throw new Error("Forbidden: you cannot manage this user's current role");
+    }
 
     // Already exactly this single role — nothing to do.
     if (roles.length === 1 && roles[0] === data.role) {
@@ -203,7 +227,10 @@ export const adminSetRole = createServerFn({ method: "POST" })
             { onConflict: "user_id" },
           );
         if (codeErr) {
-          console.error("[admin-users] Failed to seed access code on role change:", codeErr.message);
+          console.error(
+            "[admin-users] Failed to seed access code on role change:",
+            codeErr.message,
+          );
         }
       }
     }
@@ -212,7 +239,7 @@ export const adminSetRole = createServerFn({ method: "POST" })
       supabaseAdmin,
       actorId: context.userId,
       actorName: await loadActorName(context.userId),
-      actorRole: "admin",
+      actorRole,
       action: "set_user_role",
       entityType: "user_roles",
       metadata: { targetUserId: data.userId, role: data.role, previousRoles: roles },
@@ -228,12 +255,107 @@ export const adminResetPassword = createServerFn({ method: "POST" })
     z.object({ userId: z.string().uuid(), newPassword: z.string().min(8).max(128) }).parse(input),
   )
   .handler(async ({ data, context }) => {
-    await ensureRequesterIsAdmin(context.userId);
+    const actorRole = await requireUserManager(context.userId);
+    await requireTargetAccess(actorRole, data.userId);
     const { error } = await supabaseAdmin.auth.admin.updateUserById(data.userId, {
       password: data.newPassword,
     });
     if (error) throw new Error(error.message);
     return { ok: true };
+  });
+
+export type ManagedUserRow = {
+  user_id: string;
+  full_name: string;
+  username: string | null;
+  email: string;
+  is_active: boolean;
+  role: string | null;
+  access_code: string | null;
+};
+
+export const listManagedUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const actorRole = await requireUserManager(context.userId);
+    const allowedRoles = manageableRolesFor(actorRole);
+
+    const { data: roleRows, error: rolesError } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, role");
+    if (rolesError) throw new Error(rolesError.message);
+
+    const rolesByUser = new Map<string, string[]>();
+    for (const row of roleRows ?? []) {
+      const roles = rolesByUser.get(row.user_id) ?? [];
+      roles.push(String(row.role));
+      rolesByUser.set(row.user_id, roles);
+    }
+
+    const visibleIds =
+      actorRole === "admin"
+        ? null
+        : Array.from(rolesByUser.entries())
+            .filter(([, roles]) => canManageTargetRoles(actorRole, roles))
+            .map(([userId]) => userId);
+
+    if (visibleIds?.length === 0) return [] as ManagedUserRow[];
+
+    let profileQuery = supabaseAdmin
+      .from("profiles")
+      .select("user_id, full_name, username, email, is_active, created_at")
+      .order("created_at", { ascending: false });
+    if (visibleIds) profileQuery = profileQuery.in("user_id", visibleIds);
+
+    const [{ data: profiles, error: profilesError }, { data: codes, error: codesError }] =
+      await Promise.all([
+        profileQuery,
+        supabaseAdmin.from("user_access_codes").select("user_id, code"),
+      ]);
+    if (profilesError) throw new Error(profilesError.message);
+    if (codesError) throw new Error(codesError.message);
+
+    const codeByUser = new Map((codes ?? []).map((row) => [row.user_id, row.code]));
+    return (profiles ?? [])
+      .map((profile) => {
+        const roles = rolesByUser.get(profile.user_id) ?? [];
+        const role = roles[0] ?? null;
+        return {
+          user_id: profile.user_id,
+          full_name: profile.full_name,
+          username: profile.username,
+          email: profile.email,
+          is_active: profile.is_active,
+          role,
+          access_code: codeByUser.get(profile.user_id) ?? null,
+        } satisfies ManagedUserRow;
+      })
+      .filter(
+        (user) => actorRole === "admin" || (user.role && canManageRole(actorRole, user.role)),
+      );
+  });
+
+export const regenerateManagedUserAccessCode = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) => z.object({ userId: z.string().uuid() }).parse(input))
+  .handler(async ({ data, context }) => {
+    const actorRole = await requireUserManager(context.userId);
+    await requireTargetAccess(actorRole, data.userId);
+    const code = String(Math.floor(Math.random() * 1_000_000)).padStart(6, "0");
+    const { error } = await supabaseAdmin
+      .from("user_access_codes")
+      .upsert({ user_id: data.userId, code, verified_session_id: null }, { onConflict: "user_id" });
+    if (error) throw new Error(error.message);
+    await logActivity({
+      supabaseAdmin,
+      actorId: context.userId,
+      actorName: await loadActorName(context.userId),
+      actorRole,
+      action: "regenerate_user_access_code",
+      entityType: "user_access_codes",
+      metadata: { targetUserId: data.userId },
+    });
+    return { ok: true, code };
   });
 
 async function createUserInternal(data: z.infer<typeof createUserSchema>) {

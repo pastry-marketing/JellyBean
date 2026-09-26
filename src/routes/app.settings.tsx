@@ -61,8 +61,16 @@ import {
   adminResetPassword,
   adminSetActive,
   adminSetRole,
+  listManagedUsers,
+  regenerateManagedUserAccessCode,
+  type ManagedUserRow,
 } from "@/lib/admin-users.functions";
 import { adminDeleteUser } from "@/lib/login-otp.functions";
+import {
+  manageableRolesFor,
+  type UserManagementRole,
+  type UserManagerRole,
+} from "@/lib/user-management-permissions";
 import { cn } from "@/lib/utils";
 
 type SettingsTab = "general" | "updates" | "users" | "docs" | "crm-updates";
@@ -111,7 +119,8 @@ function Page() {
   const auth = useAuth();
   const { tab: searchTab } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const tab = searchTab ?? "general";
+  const isAdmin = auth.primaryRole === "admin";
+  const tab = isAdmin ? (searchTab ?? "general") : "users";
 
   function setTab(nextTab: SettingsTab) {
     void navigate({
@@ -121,53 +130,60 @@ function Page() {
 
   return (
     <div>
-      <PageHeader title="Settings" description="System-wide preferences and team management." />
+      <PageHeader
+        title={isAdmin ? "Settings" : "Users"}
+        description={
+          isAdmin ? "System-wide preferences and team management." : "Create and manage your team."
+        }
+      />
       <PageBody>
-        <RoleGate allow={["admin"]} current={auth.primaryRole}>
-          <div className="crm-toolbar-panel inline-flex mb-5">
-            <div className="flex gap-1 flex-wrap">
-              <TabBtn
-                active={tab === "general"}
-                onClick={() => setTab("general")}
-                icon={<SettingsIcon className="h-3.5 w-3.5" />}
-              >
-                General
-              </TabBtn>
-              <TabBtn
-                active={tab === "updates"}
-                onClick={() => setTab("updates")}
-                icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-              >
-                Updates
-              </TabBtn>
-              <TabBtn
-                active={tab === "users"}
-                onClick={() => setTab("users")}
-                icon={<UsersIcon className="h-3.5 w-3.5" />}
-              >
-                Users
-              </TabBtn>
-              <TabBtn
-                active={tab === "docs"}
-                onClick={() => setTab("docs")}
-                icon={<BookOpen className="h-3.5 w-3.5" />}
-              >
-                Documentation
-              </TabBtn>
-              <TabBtn
-                active={tab === "crm-updates"}
-                onClick={() => setTab("crm-updates")}
-                icon={<Megaphone className="h-3.5 w-3.5" />}
-              >
-                CRM Updates
-              </TabBtn>
+        <RoleGate allow={["admin", "sub_admin", "cs_admin"]} current={auth.primaryRole}>
+          {isAdmin && (
+            <div className="crm-toolbar-panel inline-flex mb-5">
+              <div className="flex gap-1 flex-wrap">
+                <TabBtn
+                  active={tab === "general"}
+                  onClick={() => setTab("general")}
+                  icon={<SettingsIcon className="h-3.5 w-3.5" />}
+                >
+                  General
+                </TabBtn>
+                <TabBtn
+                  active={tab === "updates"}
+                  onClick={() => setTab("updates")}
+                  icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                >
+                  Updates
+                </TabBtn>
+                <TabBtn
+                  active={tab === "users"}
+                  onClick={() => setTab("users")}
+                  icon={<UsersIcon className="h-3.5 w-3.5" />}
+                >
+                  Users
+                </TabBtn>
+                <TabBtn
+                  active={tab === "docs"}
+                  onClick={() => setTab("docs")}
+                  icon={<BookOpen className="h-3.5 w-3.5" />}
+                >
+                  Documentation
+                </TabBtn>
+                <TabBtn
+                  active={tab === "crm-updates"}
+                  onClick={() => setTab("crm-updates")}
+                  icon={<Megaphone className="h-3.5 w-3.5" />}
+                >
+                  CRM Updates
+                </TabBtn>
+              </div>
             </div>
-          </div>
-          {tab === "general" && <GeneralTab />}
-          {tab === "updates" && <UpdatesTab />}
-          {tab === "users" && <UsersTab />}
-          {tab === "docs" && <DocumentationTab />}
-          {tab === "crm-updates" && <CrmUpdatesTab />}
+          )}
+          {isAdmin && tab === "general" && <GeneralTab />}
+          {isAdmin && tab === "updates" && <UpdatesTab />}
+          {tab === "users" && <UsersTab managerRole={auth.primaryRole as UserManagerRole} />}
+          {isAdmin && tab === "docs" && <DocumentationTab />}
+          {isAdmin && tab === "crm-updates" && <CrmUpdatesTab />}
         </RoleGate>
       </PageBody>
     </div>
@@ -389,15 +405,7 @@ function UpdatesTab() {
   );
 }
 
-type UserRow = {
-  user_id: string;
-  full_name: string;
-  username: string | null;
-  email: string;
-  is_active: boolean;
-  role: string | null;
-  access_code: string | null;
-};
+type UserRow = ManagedUserRow;
 
 function roleLabel(role: string | null) {
   if (!role) return "-";
@@ -405,45 +413,16 @@ function roleLabel(role: string | null) {
   return role.replace(/_/g, " ");
 }
 
-function UsersTab() {
+function UsersTab({ managerRole }: { managerRole: UserManagerRole }) {
   const qc = useQueryClient();
   const [creating, setCreating] = useState(false);
+  const getUsers = useServerFn(listManagedUsers);
+  const roleOptions = manageableRolesFor(managerRole);
+  const usersQueryKey = ["managed-users", managerRole] as const;
 
   const usersQuery = useQuery({
-    queryKey: ["admin-users"],
-    queryFn: async (): Promise<UserRow[]> => {
-      const [
-        { data: profiles, error: pErr },
-        { data: roles, error: rErr },
-        { data: codes, error: cErr },
-      ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("user_id, full_name, username, email, is_active")
-          .order("created_at", { ascending: false }),
-        supabase.from("user_roles").select("user_id, role"),
-        supabase.rpc("admin_list_access_codes" as never) as unknown as Promise<{
-          data: Array<{ user_id: string; code: string }> | null;
-          error: unknown;
-        }>,
-      ]);
-      if (pErr) throw pErr;
-      if (rErr) throw rErr;
-      if (cErr) console.warn("[admin] access codes fetch failed", cErr);
-      const roleMap = new Map<string, string>();
-      (roles ?? []).forEach((r) => roleMap.set(r.user_id, r.role));
-      const codeMap = new Map<string, string>();
-      (codes ?? []).forEach((c) => codeMap.set(c.user_id, c.code));
-      return (profiles ?? []).map((p) => ({
-        user_id: p.user_id,
-        full_name: p.full_name,
-        username: p.username,
-        email: p.email,
-        is_active: p.is_active,
-        role: roleMap.get(p.user_id) ?? null,
-        access_code: codeMap.get(p.user_id) ?? null,
-      }));
-    },
+    queryKey: usersQueryKey,
+    queryFn: async (): Promise<UserRow[]> => await getUsers(),
   });
 
   return (
@@ -478,9 +457,17 @@ function UsersTab() {
               <UserRowItem
                 key={u.user_id}
                 user={u}
-                onChange={() => qc.invalidateQueries({ queryKey: ["admin-users"] })}
+                roleOptions={roleOptions}
+                onChange={() => qc.invalidateQueries({ queryKey: usersQueryKey })}
               />
             ))}
+            {usersQuery.isError && (
+              <tr>
+                <td colSpan={7} className="text-center text-destructive py-6">
+                  {friendlyError(usersQuery.error)}
+                </td>
+              </tr>
+            )}
             {usersQuery.data?.length === 0 && (
               <tr>
                 <td colSpan={7} className="text-center text-muted-foreground py-6">
@@ -493,10 +480,11 @@ function UsersTab() {
       </div>
       {creating && (
         <CreateUserDialog
+          roleOptions={roleOptions}
           onClose={() => setCreating(false)}
           onCreated={() => {
             setCreating(false);
-            qc.invalidateQueries({ queryKey: ["admin-users"] });
+            qc.invalidateQueries({ queryKey: usersQueryKey });
           }}
         />
       )}
@@ -504,24 +492,22 @@ function UsersTab() {
   );
 }
 
-function UserRowItem({ user, onChange }: { user: UserRow; onChange: () => void }) {
+function UserRowItem({
+  user,
+  roleOptions,
+  onChange,
+}: {
+  user: UserRow;
+  roleOptions: readonly UserManagementRole[];
+  onChange: () => void;
+}) {
   const setActive = useServerFn(adminSetActive);
   const resetPw = useServerFn(adminResetPassword);
   const deleteUser = useServerFn(adminDeleteUser);
   const setRole = useServerFn(adminSetRole);
   const [busy, setBusy] = useState(false);
 
-  type RoleValue =
-    | "admin"
-    | "sub_admin"
-    | "maturing"
-    | "cs"
-    | "cs_admin"
-    | "acc_handler"
-    | "facebook"
-    | "seo";
-
-  async function changeRole(next: RoleValue) {
+  async function changeRole(next: UserManagementRole) {
     if (next === user.role) return;
     setBusy(true);
     try {
@@ -592,21 +578,18 @@ function UserRowItem({ user, onChange }: { user: UserRow; onChange: () => void }
       <td>
         <Select
           value={user.role ?? undefined}
-          onValueChange={(v) => void changeRole(v as RoleValue)}
+          onValueChange={(v) => void changeRole(v as UserManagementRole)}
           disabled={busy}
         >
           <SelectTrigger className="h-8 w-[150px] text-[12px] capitalize">
             <SelectValue placeholder="Set role" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="sub_admin">Sub-admin</SelectItem>
-            <SelectItem value="maturing">Maturing</SelectItem>
-            <SelectItem value="cs">CS</SelectItem>
-            <SelectItem value="cs_admin">CS Admin</SelectItem>
-            <SelectItem value="acc_handler">Acc Handler</SelectItem>
-            <SelectItem value="facebook">Facebook</SelectItem>
-            <SelectItem value="seo">SEO</SelectItem>
+            {roleOptions.map((role) => (
+              <SelectItem key={role} value={role} className="capitalize">
+                {roleLabel(role)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </td>
@@ -734,7 +717,15 @@ function UserRowItem({ user, onChange }: { user: UserRow; onChange: () => void }
   );
 }
 
-function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+function CreateUserDialog({
+  roleOptions,
+  onClose,
+  onCreated,
+}: {
+  roleOptions: readonly UserManagementRole[];
+  onClose: () => void;
+  onCreated: () => void;
+}) {
   const createUser = useServerFn(adminCreateUser);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -742,15 +733,7 @@ function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; onCreat
     fullName: "",
     email: "",
     password: "",
-    role: "maturing" as
-      | "admin"
-      | "sub_admin"
-      | "maturing"
-      | "cs"
-      | "cs_admin"
-      | "acc_handler"
-      | "facebook"
-      | "seo",
+    role: roleOptions[0] as UserManagementRole,
     isActive: true,
   });
 
@@ -826,14 +809,11 @@ function CreateUserDialog({ onClose, onCreated }: { onClose: () => void; onCreat
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="sub_admin">Sub-admin</SelectItem>
-                <SelectItem value="maturing">Maturing</SelectItem>
-                <SelectItem value="cs">CS</SelectItem>
-                <SelectItem value="cs_admin">CS Admin</SelectItem>
-                <SelectItem value="acc_handler">Acc Handler</SelectItem>
-                <SelectItem value="facebook">Facebook</SelectItem>
-                <SelectItem value="seo">SEO</SelectItem>
+                {roleOptions.map((role) => (
+                  <SelectItem key={role} value={role} className="capitalize">
+                    {roleLabel(role)}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
@@ -863,6 +843,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function AccessCodeCell({ user, onChange }: { user: UserRow; onChange: () => void }) {
   const [busy, setBusy] = useState(false);
   const [reveal, setReveal] = useState(false);
+  const regenerateCode = useServerFn(regenerateManagedUserAccessCode);
 
   if (user.role === "admin") {
     return <span className="text-xs text-muted-foreground">—</span>;
@@ -883,12 +864,7 @@ function AccessCodeCell({ user, onChange }: { user: UserRow; onChange: () => voi
   async function regenerate() {
     setBusy(true);
     try {
-      const { data, error } = await supabase.rpc(
-        "admin_regenerate_access_code" as never,
-        { _user_id: user.user_id } as never,
-      );
-      if (error) throw error;
-      const newCode = typeof data === "string" ? data : String(data);
+      const { code: newCode } = await regenerateCode({ data: { userId: user.user_id } });
       try {
         await navigator.clipboard.writeText(newCode);
         toast.success(`New code ${newCode} copied`);
