@@ -23,7 +23,9 @@ export function DocumentationTab() {
         import("jspdf"),
         import("jspdf-autotable"),
       ]);
-      const autoTable = (autoTableMod as any).default ?? autoTableMod;
+      const autoTable = ((autoTableMod as Record<string, unknown>).default ?? autoTableMod) as (
+        ...args: unknown[]
+      ) => void;
 
       const doc = new jsPDF({ unit: "pt", format: "letter" });
       const pageWidth = doc.internal.pageSize.getWidth();
@@ -144,7 +146,7 @@ export function DocumentationTab() {
                 // keep header spacing consistent on wrapped pages
               },
             });
-            y = (doc as any).lastAutoTable.finalY + 14;
+            y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 14;
           }
           void sec;
         }
@@ -290,15 +292,9 @@ function BlockView({ block }: { block: DocBlock }) {
           </thead>
           <tbody>
             {block.rows.map((row, ri) => (
-              <tr
-                key={ri}
-                className="border-b border-border/40 last:border-0 odd:bg-muted/20"
-              >
+              <tr key={ri} className="border-b border-border/40 last:border-0 odd:bg-muted/20">
                 {row.map((cell, ci) => (
-                  <td
-                    key={ci}
-                    className="px-3 py-2 text-muted-foreground align-top"
-                  >
+                  <td key={ci} className="px-3 py-2 text-muted-foreground align-top">
                     {cell}
                   </td>
                 ))}

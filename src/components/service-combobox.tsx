@@ -179,18 +179,18 @@ export function ServiceCombobox({
         </div>
       </PopoverAnchor>
       <PopoverPrimitive.Content
-  side="bottom"
-  align="start"
-  sideOffset={6}
-  collisionPadding={16}
-  onOpenAutoFocus={(event) => event.preventDefault()}
-  className="z-[70] overflow-hidden rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none"
-  style={{ width: contentWidth }}
->
-  <div
-    className="max-h-[300px] overflow-y-auto overscroll-contain"
-    onWheel={(event) => event.stopPropagation()}
-  >
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        collisionPadding={16}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        className="z-[70] overflow-hidden rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none"
+        style={{ width: contentWidth }}
+      >
+        <div
+          className="max-h-[300px] overflow-y-auto overscroll-contain"
+          onWheel={(event) => event.stopPropagation()}
+        >
           <div id={listboxId} role="listbox" className="p-1">
             {showCustomAction ? (
               <ServiceOptionButton
@@ -240,8 +240,8 @@ export function ServiceCombobox({
               </div>
             )}
           </div>
-         </div>
-</PopoverPrimitive.Content>
+        </div>
+      </PopoverPrimitive.Content>
     </Popover>
   );
 }

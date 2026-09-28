@@ -34,7 +34,12 @@ interface DraftsDialogProps {
   onOpenDraft: (draft: LeadDraft) => void;
 }
 
-export function DraftsDialog({ open, onOpenChange, filterSource = "all", onOpenDraft }: DraftsDialogProps) {
+export function DraftsDialog({
+  open,
+  onOpenChange,
+  filterSource = "all",
+  onOpenDraft,
+}: DraftsDialogProps) {
   const { user, profile, primaryRole } = useAuth();
   const qc = useQueryClient();
   const [drafts, setDrafts] = useState<LeadDraft[]>([]);
@@ -59,7 +64,9 @@ export function DraftsDialog({ open, onOpenChange, filterSource = "all", onOpenD
     if (open) void load();
   }, [open, load]);
 
-  const visible = drafts.filter((d) => (filterSource === "all" ? true : d.source_type === filterSource));
+  const visible = drafts.filter((d) =>
+    filterSource === "all" ? true : d.source_type === filterSource,
+  );
 
   async function handleDelete(id: string) {
     const ok = await confirmDialog({

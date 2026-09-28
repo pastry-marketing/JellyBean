@@ -40,16 +40,19 @@ export function CrmUpdatesNotifier() {
     const role = String(primaryRole).toLowerCase();
     const { data: notifs } = await supabase
       .from("crm_update_notifications")
-      .select("id, title, description, affected_section, target_roles, priority, is_active, published_at")
+      .select(
+        "id, title, description, affected_section, target_roles, priority, is_active, published_at",
+      )
       .eq("is_active", true)
       .order("published_at", { ascending: true });
     if (!notifs || notifs.length === 0) return;
 
     // Client-side role filter: Admin can read all rows (for history),
     // but popups must only fire when the user's role is in target_roles.
-    const targeted = notifs.filter((n) =>
-      Array.isArray(n.target_roles) &&
-      n.target_roles.map((r: string) => String(r).toLowerCase()).includes(role),
+    const targeted = notifs.filter(
+      (n) =>
+        Array.isArray(n.target_roles) &&
+        n.target_roles.map((r: string) => String(r).toLowerCase()).includes(role),
     );
     if (targeted.length === 0) return;
 
@@ -64,7 +67,6 @@ export function CrmUpdatesNotifier() {
       if (!ack.has(n.id)) enqueue(n as Notification);
     }
   }, [user?.id, primaryRole, enqueue]);
-
 
   useEffect(() => {
     void loadPending();
@@ -118,24 +120,43 @@ export function CrmUpdatesNotifier() {
   const isImportant = current.priority === "important";
 
   return (
-    <Dialog open={true} onOpenChange={() => { /* modal — must acknowledge */ }}>
+    <Dialog
+      open={true}
+      onOpenChange={() => {
+        /* modal — must acknowledge */
+      }}
+    >
       <DialogContent
         className="max-w-md rounded-2xl p-0 overflow-hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <div className={isImportant ? "bg-gradient-to-br from-amber-500/15 to-transparent px-6 pt-6 pb-4" : "bg-gradient-to-br from-primary/12 to-transparent px-6 pt-6 pb-4"}>
+        <div
+          className={
+            isImportant
+              ? "bg-gradient-to-br from-amber-500/15 to-transparent px-6 pt-6 pb-4"
+              : "bg-gradient-to-br from-primary/12 to-transparent px-6 pt-6 pb-4"
+          }
+        >
           <DialogHeader className="text-left space-y-2">
             <div className="flex items-center gap-2">
-              <div className={`grid h-9 w-9 place-items-center rounded-xl ${isImportant ? "bg-amber-500 text-white" : "bg-primary text-primary-foreground"}`}>
-                {isImportant ? <AlertTriangle className="h-4 w-4" /> : <Sparkles className="h-4 w-4" />}
+              <div
+                className={`grid h-9 w-9 place-items-center rounded-xl ${isImportant ? "bg-amber-500 text-white" : "bg-primary text-primary-foreground"}`}
+              >
+                {isImportant ? (
+                  <AlertTriangle className="h-4 w-4" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
               </div>
               <div className="flex flex-col">
                 <span className="text-[11px] uppercase tracking-[0.14em] font-bold text-muted-foreground">
                   CRM Update
                 </span>
                 {isImportant && (
-                  <Badge variant="destructive" className="w-fit mt-0.5 text-[10px]">Important</Badge>
+                  <Badge variant="destructive" className="w-fit mt-0.5 text-[10px]">
+                    Important
+                  </Badge>
                 )}
               </div>
             </div>

@@ -79,7 +79,9 @@ export function ConfirmDialogProvider() {
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={() => handle(true)}
-            className={cn(destructive && "bg-destructive text-destructive-foreground hover:bg-destructive/90")}
+            className={cn(
+              destructive && "bg-destructive text-destructive-foreground hover:bg-destructive/90",
+            )}
           >
             {pending?.confirmText ?? "Continue"}
           </AlertDialogAction>

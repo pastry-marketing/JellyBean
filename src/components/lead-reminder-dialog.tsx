@@ -23,7 +23,6 @@ export type ReminderLeadInfo = {
   is_unassigned?: boolean;
 };
 
-
 const MAX_LEN = 1000;
 
 export function LeadReminderDialog({
@@ -57,7 +56,10 @@ export function LeadReminderDialog({
         supabase.rpc as unknown as (
           fn: string,
           args: Record<string, unknown>,
-        ) => Promise<{ data: { mode?: string; recipient_count?: number } | null; error: { message: string } | null }>
+        ) => Promise<{
+          data: { mode?: string; recipient_count?: number } | null;
+          error: { message: string } | null;
+        }>
       )("send_lead_reminder", { _lead_id: lead.id, _message: trimmed });
       if (error) throw new Error(error.message);
       const count = data?.recipient_count ?? 0;
@@ -70,7 +72,6 @@ export function LeadReminderDialog({
       setSending(false);
     }
   }
-
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -94,15 +95,15 @@ export function LeadReminderDialog({
           <div className="space-y-3">
             <div className="rounded-lg border border-border bg-surface/60 px-3 py-2.5 text-[12.5px] space-y-1">
               <Row label="Customer" value={lead.customer_name} />
-              <Row label="Phone" value={formatPhone(lead.customer_number) || lead.customer_number} />
+              <Row
+                label="Phone"
+                value={formatPhone(lead.customer_number) || lead.customer_number}
+              />
               <Row
                 label="Recipient"
                 value={lead.is_unassigned ? "All CS users" : "Assigned CS + CS admins"}
               />
             </div>
-
-
-
 
             <div className="space-y-1.5">
               <label className="text-[12px] font-medium text-foreground/90">
@@ -124,11 +125,7 @@ export function LeadReminderDialog({
         )}
 
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => handleOpenChange(false)}
-            disabled={sending}
-          >
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={sending}>
             Cancel
           </Button>
           <Button onClick={handleSend} disabled={sending || !note.trim()}>

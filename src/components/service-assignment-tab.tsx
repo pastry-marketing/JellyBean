@@ -33,7 +33,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SERVICE_CATEGORIES, filterServiceCategories, isExistingService } from "@/data/service-options";
+import {
+  SERVICE_CATEGORIES,
+  filterServiceCategories,
+  isExistingService,
+} from "@/data/service-options";
 import {
   listServiceAssignments,
   removeServiceAssignment,
@@ -138,7 +142,12 @@ export function ServiceAssignmentTab() {
               {(rowsQ.error as Error)?.message ?? "Unknown error"}
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => rowsQ.refetch()} disabled={rowsQ.isFetching}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => rowsQ.refetch()}
+            disabled={rowsQ.isFetching}
+          >
             {rowsQ.isFetching ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
             Retry
           </Button>
@@ -186,7 +195,9 @@ export function ServiceAssignmentTab() {
                       <div className="text-sm">{row.cs_user_name ?? "-"}</div>
                       <div className="text-xs text-muted-foreground">{row.cs_user_email ?? ""}</div>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{row.total_leads ?? 0}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {row.total_leads ?? 0}
+                    </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -301,7 +312,9 @@ function ServiceAssignmentDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col overflow-visible">
         <DialogHeader>
-          <DialogTitle>{editing ? `Change assignment - ${editing.service_name}` : "Assign Services"}</DialogTitle>
+          <DialogTitle>
+            {editing ? `Change assignment - ${editing.service_name}` : "Assign Services"}
+          </DialogTitle>
           <DialogDescription>
             {editing
               ? "Change only the assigned CS user. This affects future incoming leads only; existing leads keep their current owner."
@@ -331,7 +344,9 @@ function ServiceAssignmentDialog({
             {editing ? (
               <div className="mt-1 rounded-md border bg-muted/30 px-3 py-2 text-sm">
                 <div className="font-medium">{editing.service_name}</div>
-                <div className="text-xs text-muted-foreground">{editing.service_category ?? "Custom service"}</div>
+                <div className="text-xs text-muted-foreground">
+                  {editing.service_category ?? "Custom service"}
+                </div>
               </div>
             ) : (
               <ServiceMultiSelector selected={selectedServices} onSelect={addService} />
@@ -339,7 +354,9 @@ function ServiceAssignmentDialog({
           </div>
 
           <div>
-            <div className="mb-2 text-xs font-medium text-muted-foreground">Selected services summary</div>
+            <div className="mb-2 text-xs font-medium text-muted-foreground">
+              Selected services summary
+            </div>
             {selectedServices.length === 0 ? (
               <div className="rounded-md border border-dashed px-3 py-4 text-center text-sm text-muted-foreground">
                 No services selected.
@@ -401,7 +418,10 @@ function ServiceMultiSelector({
     () => new Set(selected.map((item) => normalizeLeadService(item.service_name)).filter(Boolean)),
     [selected],
   );
-  const filteredCategories = useMemo(() => filterServiceCategories(query, SERVICE_CATEGORIES), [query]);
+  const filteredCategories = useMemo(
+    () => filterServiceCategories(query, SERVICE_CATEGORIES),
+    [query],
+  );
   const customValue = query.trim();
   const showCustomAction =
     customValue.length > 0 &&
@@ -415,7 +435,9 @@ function ServiceMultiSelector({
         service,
       })),
     );
-    return showCustomAction ? [{ type: "custom", value: customValue }, ...serviceItems] : serviceItems;
+    return showCustomAction
+      ? [{ type: "custom", value: customValue }, ...serviceItems]
+      : serviceItems;
   }, [customValue, filteredCategories, showCustomAction]);
 
   function openList() {
@@ -490,19 +512,21 @@ function ServiceMultiSelector({
           />
         </div>
       </PopoverAnchor>
-     <PopoverPrimitive.Content
-              side="bottom"
-              align="start"
-              sideOffset={6}
-              collisionPadding={16}
-              onOpenAutoFocus={(event) => event.preventDefault()}
-              className="z-[80] overflow-hidden rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none"
-              style={{ width: contentWidth }}
-            >
-  <div className="h-[280px] max-h-[calc(100vh-10rem)] overflow-y-auto overscroll-contain">
+      <PopoverPrimitive.Content
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        collisionPadding={16}
+        onOpenAutoFocus={(event) => event.preventDefault()}
+        className="z-[80] overflow-hidden rounded-md border bg-popover p-0 text-popover-foreground shadow-md outline-none"
+        style={{ width: contentWidth }}
+      >
+        <div className="h-[280px] max-h-[calc(100vh-10rem)] overflow-y-auto overscroll-contain">
           <div role="listbox" className="p-1">
             {items.length === 0 ? (
-              <div className="px-3 py-5 text-center text-sm text-muted-foreground">No matching services</div>
+              <div className="px-3 py-5 text-center text-sm text-muted-foreground">
+                No matching services
+              </div>
             ) : null}
             {items.map((item, index) => {
               if (item.type === "custom") {
@@ -544,8 +568,8 @@ function ServiceMultiSelector({
               );
             })}
           </div>
-         </div>
-</PopoverPrimitive.Content>
+        </div>
+      </PopoverPrimitive.Content>
     </Popover>
   );
 }
@@ -573,7 +597,9 @@ function ServiceChoiceButton({
       onClick={onSelect}
       className={cn(
         "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none transition-colors",
-        selected ? "bg-accent text-accent-foreground" : "hover:bg-accent hover:text-accent-foreground",
+        selected
+          ? "bg-accent text-accent-foreground"
+          : "hover:bg-accent hover:text-accent-foreground",
       )}
     >
       <span className="min-w-0 truncate">{children}</span>
