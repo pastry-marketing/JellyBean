@@ -37,15 +37,22 @@ function isCrispMaskedMessage(content: string | null | undefined): boolean {
 }
 
 /** Parse raw message content for any message type. */
-function parseMessageContent(msg: any): string {
+function parseMessageContent(msg: Record<string, unknown>): string {
   const rawContent = msg.content;
   if (typeof rawContent === "string" && rawContent.trim()) return rawContent.trim();
   if (rawContent && typeof rawContent === "object") {
-    if (typeof rawContent.text === "string" && rawContent.text.trim()) return rawContent.text.trim();
-    if (typeof rawContent.name === "string" && rawContent.name.trim()) return rawContent.name.trim();
+    const rc = rawContent as Record<string, unknown>;
+    if (typeof rc.text === "string" && rc.text.trim()) return rc.text.trim();
+    if (typeof rc.name === "string" && rc.name.trim()) return rc.name.trim();
   }
   if (msg.type === "file" || msg.type === "attachment") return "[File]";
-  if (msg.type === "animation" || msg.type === "picker" || msg.type === "image" || msg.type === "media") return "[Image]";
+  if (
+    msg.type === "animation" ||
+    msg.type === "picker" ||
+    msg.type === "image" ||
+    msg.type === "media"
+  )
+    return "[Image]";
   if (msg.type === "audio") return "[Audio]";
   return "[Attachment]";
 }
@@ -98,21 +105,36 @@ serve(async (req) => {
       const websiteId = ws.crisp_website_id;
       const secretId = ws.credential_secret_id;
       if (!secretId) {
-        syncErrors.push({ websiteId, workspaceName: ws.workspace_name || undefined, error: "No credentials secret ID found" });
+        syncErrors.push({
+          websiteId,
+          workspaceName: ws.workspace_name || undefined,
+          error: "No credentials secret ID found",
+        });
         continue;
       }
 
       try {
-        const { data: secretData, error: secretErr } = await supabase.rpc("crisp_get_workspace_secret", {
-          p_secret_id: secretId,
-        });
+        const { data: secretData, error: secretErr } = await supabase.rpc(
+          "crisp_get_workspace_secret",
+          {
+            p_secret_id: secretId,
+          },
+        );
 
-        const tokenId = (secretData as any)?.token_id || (secretData as any)?.tokenId;
-        const tokenKey = (secretData as any)?.token_key || (secretData as any)?.tokenKey;
+        const tokenId =
+          (secretData as Record<string, unknown>)?.token_id ||
+          (secretData as Record<string, unknown>)?.tokenId;
+        const tokenKey =
+          (secretData as Record<string, unknown>)?.token_key ||
+          (secretData as Record<string, unknown>)?.tokenKey;
 
         if (secretErr || !tokenId || !tokenKey) {
           console.error(`Missing Vault credentials for workspace ${websiteId}`);
-          syncErrors.push({ websiteId, workspaceName: ws.workspace_name || undefined, error: "Missing Vault credentials" });
+          syncErrors.push({
+            websiteId,
+            workspaceName: ws.workspace_name || undefined,
+            error: "Missing Vault credentials",
+          });
           continue;
         }
 
@@ -127,7 +149,10 @@ serve(async (req) => {
         if (!ws.workspace_name) {
           const wsName = await resolveWorkspaceName(websiteId, authString);
           if (wsName) {
-            await supabase.from("crisp_workspaces").update({ workspace_name: wsName }).eq("id", ws.id);
+            await supabase
+              .from("crisp_workspaces")
+              .update({ workspace_name: wsName })
+              .eq("id", ws.id);
           }
         }
 
@@ -140,9 +165,18 @@ serve(async (req) => {
           const listRes = await fetch(listUrl, { headers });
           if (!listRes.ok) {
             const errJson = await listRes.json().catch(() => ({}));
-            const reason = (errJson as any)?.reason || (errJson as any)?.data?.message || `HTTP ${listRes.status}`;
-            console.error(`Crisp history sync failed for workspace ${websiteId} on page ${page}: ${reason}`);
-            syncErrors.push({ websiteId, workspaceName: ws.workspace_name || undefined, error: reason });
+            const reason =
+              (errJson as Record<string, unknown>)?.reason ||
+              ((errJson as Record<string, unknown>)?.data as Record<string, unknown>)?.message ||
+              `HTTP ${listRes.status}`;
+            console.error(
+              `Crisp history sync failed for workspace ${websiteId} on page ${page}: ${reason}`,
+            );
+            syncErrors.push({
+              websiteId,
+              workspaceName: ws.workspace_name || undefined,
+              error: reason,
+            });
             break; // Stop paginating this failed workspace and continue with others
           }
 
@@ -155,11 +189,11 @@ serve(async (req) => {
           for (let sIdx = 0; sIdx < sessions.length; sIdx += SESSION_CHUNK) {
             const sessionSlice = sessions.slice(sIdx, sIdx + SESSION_CHUNK);
             await Promise.allSettled(
-              sessionSlice.map(async (session: any) => {
-                const sessionId = session.session_id;
+              sessionSlice.map(async (session: Record<string, unknown>) => {
+                const sessionId = session.session_id as string;
                 if (!sessionId) return;
 
-                const customerMeta = session.meta || {};
+                const customerMeta = (session.meta as Record<string, unknown>) || {};
                 const incomingName = customerMeta.nickname || session.nickname || null;
                 const incomingEmail = customerMeta.email || session.email || null;
                 const incomingPhone = customerMeta.phone || session.phone || null;
@@ -167,18 +201,21 @@ serve(async (req) => {
                 const state = session.state || "unresolved";
 
                 // Import Crisp native operator unread count (session.unread.operator)
-                const unreadObj = session.unread || {};
-                const operatorUnread = typeof unreadObj.operator === "number"
-                  ? unreadObj.operator
-                  : typeof session.unread_count === "number"
-                  ? session.unread_count
-                  : 0;
+                const unreadObj = (session.unread as Record<string, unknown>) || {};
+                const operatorUnread =
+                  typeof unreadObj.operator === "number"
+                    ? unreadObj.operator
+                    : typeof session.unread_count === "number"
+                      ? session.unread_count
+                      : 0;
 
                 const unreadCount = Math.max(0, operatorUnread);
 
                 const { data: existingConv } = await supabase
                   .from("crisp_conversations")
-                  .select("customer_name, customer_email, customer_phone, customer_avatar, last_message, last_message_at, last_customer_unread_at")
+                  .select(
+                    "customer_name, customer_email, customer_phone, customer_avatar, last_message, last_message_at, last_customer_unread_at",
+                  )
                   .eq("crisp_website_id", websiteId)
                   .eq("crisp_session_id", sessionId)
                   .maybeSingle();
@@ -202,7 +239,7 @@ serve(async (req) => {
                       unread_count: unreadCount,
                       updated_at: new Date().toISOString(),
                     },
-                    { onConflict: "crisp_website_id,crisp_session_id" }
+                    { onConflict: "crisp_website_id,crisp_session_id" },
                   )
                   .select("id")
                   .single();
@@ -216,7 +253,7 @@ serve(async (req) => {
 
                 if (msgsRes.ok) {
                   const msgsData = await msgsRes.json();
-                  const messagesList: any[] = msgsData.data || [];
+                  const messagesList: Record<string, unknown>[] = msgsData.data || [];
 
                   if (messagesList.length > 0) {
                     // Sort messages chronologically ascending for correct ordering
@@ -233,7 +270,9 @@ serve(async (req) => {
                       const fromStr = String(m.from || "user").toLowerCase();
                       const ts = m.timestamp || 0;
                       if (fromStr !== "operator" && !lastCustomerMsgTime) {
-                        lastCustomerMsgTime = m.timestamp ? new Date(m.timestamp).toISOString() : null;
+                        lastCustomerMsgTime = m.timestamp
+                          ? new Date(m.timestamp).toISOString()
+                          : null;
                         lastCustomerMsgContent = parseMessageContent(m);
                         lastCustomerTimestamp = ts;
                       } else if (fromStr === "operator" && !lastOperatorTimestamp) {
@@ -245,7 +284,7 @@ serve(async (req) => {
                     const needsReply = Boolean(
                       lastCustomerMsgTime &&
                       !isMaskedCustomerMsg &&
-                      (!lastOperatorTimestamp || lastCustomerTimestamp > lastOperatorTimestamp)
+                      (!lastOperatorTimestamp || lastCustomerTimestamp > lastOperatorTimestamp),
                     );
                     const calculatedUnread = needsReply ? 1 : 0;
                     const lastCustUnreadAt = needsReply ? lastCustomerMsgTime : null;
@@ -262,7 +301,9 @@ serve(async (req) => {
                       const textContent = parseMessageContent(msg);
                       const crispMsgId = String(msg.fingerprint || `${sessionId}_${msg.timestamp}`);
                       const isOperator = String(msg.from).toLowerCase() === "operator";
-                      const sentAt = msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString();
+                      const sentAt = msg.timestamp
+                        ? new Date(msg.timestamp).toISOString()
+                        : new Date().toISOString();
 
                       const { error: msgErr } = await supabase.from("crisp_messages").insert({
                         conversation_id: convRecord.id,
@@ -296,11 +337,15 @@ serve(async (req) => {
                     // No messages fetched — clear unread
                     await supabase
                       .from("crisp_conversations")
-                      .update({ unread_count: 0, last_customer_unread_at: null, updated_at: new Date().toISOString() })
+                      .update({
+                        unread_count: 0,
+                        last_customer_unread_at: null,
+                        updated_at: new Date().toISOString(),
+                      })
                       .eq("id", convRecord.id);
                   }
                 }
-              })
+              }),
             );
           }
         }
@@ -311,14 +356,21 @@ serve(async (req) => {
           .eq("id", ws.id);
 
         if (wsUpdateErr) {
-          console.error(`Failed to update last_synced_at for workspace ${websiteId}:`, wsUpdateErr.message);
+          console.error(
+            `Failed to update last_synced_at for workspace ${websiteId}:`,
+            wsUpdateErr.message,
+          );
         }
 
         totalConversations += wsConversations;
         totalMessages += wsMessages;
-      } catch (wsErr: any) {
+      } catch (wsErr: unknown) {
         console.error(`Error processing workspace ${websiteId}:`, wsErr);
-        syncErrors.push({ websiteId, workspaceName: ws.workspace_name || undefined, error: wsErr.message || "Sync failed" });
+        syncErrors.push({
+          websiteId,
+          workspaceName: ws.workspace_name || undefined,
+          error: wsErr instanceof Error ? wsErr.message : "Sync failed",
+        });
       }
     }
 
@@ -329,13 +381,16 @@ serve(async (req) => {
         synced_messages: totalMessages,
         errors: syncErrors.length > 0 ? syncErrors : undefined,
       }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Crisp history sync fatal error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

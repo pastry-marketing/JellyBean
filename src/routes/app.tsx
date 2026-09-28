@@ -72,7 +72,6 @@ function AuthenticatedLayout() {
     }
   }
 
-
   return (
     <AuthProvider value={auth}>
       <AppShell auth={auth}>

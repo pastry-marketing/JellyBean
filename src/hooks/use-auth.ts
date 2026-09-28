@@ -96,7 +96,7 @@ export function useAuthState(): AuthState {
       latestSessionRef.current = sess;
       setSession(sess);
       setUser(sess?.user ?? null);
-      
+
       // Load profile and roles, then clear loading state
       withTimeout(loadProfileAndRoles(sess?.user?.id), 20000, "Supabase profile lookup")
         .catch((error) => {

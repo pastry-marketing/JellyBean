@@ -19,7 +19,7 @@ function servicesFor(categoryName: string, query: string) {
 describe("service options", () => {
   it("loads every category and service from the configured list", () => {
     expect(getServiceCategoryCount()).toBe(39);
-    expect(getServiceOptionCount()).toBe(1036);
+    expect(getServiceOptionCount()).toBe(2063);
     expect(SERVICE_CATEGORIES[0]?.category).toBe("Plumbing");
     expect(ALL_SERVICE_OPTIONS).toContain("Garage Door Repair");
   });
@@ -48,6 +48,34 @@ describe("service options", () => {
       "Garage Cabinet Installation",
       "Garage Lighting Installation",
       "Garage Ventilation Installation",
+      "Garage Door Maintenance",
+      "Garage Door Tune-Up",
+      "Garage Door Sensor Repair",
+      "Garage Door Sensor Replacement",
+      "Garage Door Roller Replacement",
+      "Garage Door Belt Replacement",
+      "Garage Door Chain Replacement",
+      "Garage Door Drum Repair",
+      "Garage Door Torsion Spring Replacement",
+      "Garage Door Extension Spring Replacement",
+      "Garage Door Alignment",
+      "Garage Door Keypad Installation",
+      "Garage Door Keypad Repair",
+      "Garage Door Remote Programming",
+      "Garage Door Remote Repair",
+      "Garage Door Bottom Seal Replacement",
+      "Garage Door Side Seal Replacement",
+      "Garage Door Top Seal Replacement",
+      "Garage Door Threshold Installation",
+      "Garage Door Conversion",
+      "Commercial Garage Door Repair",
+      "Commercial Garage Door Installation",
+      "Roll-Up Door Repair",
+      "Roll-Up Door Installation",
+      "Garage Floor Polyaspartic Coating",
+      "Garage Floor Refinishing",
+      "Garage Floor Resurfacing",
+      "Garage Floor Leveling",
     ]);
   });
 

@@ -81,10 +81,14 @@ function escapeIlikeValue(value: string) {
   return value.replace(/[%_]/g, "\\$&").replace(/,/g, " ");
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applySearchAndFilters<T extends { eq: (...a: never[]) => T; or: (...a: never[]) => T }>(
   query: T,
-  filters: { query: string; leadFilter: LeadFilter; areaFilter: string; duplicateFilter: DuplicateFilter },
+  filters: {
+    query: string;
+    leadFilter: LeadFilter;
+    areaFilter: string;
+    duplicateFilter: DuplicateFilter;
+  },
 ): T {
   let next = query;
   const trimmedQuery = filters.query.trim();
@@ -139,7 +143,6 @@ export const fetchRawLeadCache = createServerFn({ method: "GET" })
       .parse(input ?? {}),
   )
   .handler(async ({ data, context }) => {
-    
     const { data: rolesData, error: rolesError } = await context.supabase
       .from("user_roles")
       .select("role")
@@ -156,12 +159,14 @@ export const fetchRawLeadCache = createServerFn({ method: "GET" })
     const columns =
       "id, row_key, data, lead, phone, category, captured_at, lead_link, sheet_row, assigned_to, assigned_myself_at, duplicate_detected, duplicate_reason, duplicate_match_type, duplicate_key, duplicate_of_raw_lead_id, duplicate_of_qualified_lead_id, canonical_post_id, canonical_lead_link";
 
-    const applyCategory = <T extends {
-      is: (...a: never[]) => T;
-      eq: (...a: never[]) => T;
-      not: (...a: never[]) => T;
-      or: (...a: never[]) => T;
-    }>(
+    const applyCategory = <
+      T extends {
+        is: (...a: never[]) => T;
+        eq: (...a: never[]) => T;
+        not: (...a: never[]) => T;
+        or: (...a: never[]) => T;
+      },
+    >(
       query: T,
       category: CategoryFilter,
     ): T => {
@@ -264,8 +269,14 @@ export const fetchRawLeadCache = createServerFn({ method: "GET" })
           .not("assigned_myself_at" as never, "is" as never, null as never)
           .is("category" as never, null as never) as typeof totalCountQuery;
       } else {
-        totalCountQuery = applyCategory(totalCountQuery as never, data.category) as typeof totalCountQuery;
-        totalCountQuery = applyAssignment(totalCountQuery as never, data.category) as typeof totalCountQuery;
+        totalCountQuery = applyCategory(
+          totalCountQuery as never,
+          data.category,
+        ) as typeof totalCountQuery;
+        totalCountQuery = applyAssignment(
+          totalCountQuery as never,
+          data.category,
+        ) as typeof totalCountQuery;
       }
       totalCountQuery = excludeDrafts(totalCountQuery as never) as typeof totalCountQuery;
       totalCountQuery = applySearchAndFilters(totalCountQuery as never, {
@@ -288,7 +299,6 @@ export const fetchRawLeadCache = createServerFn({ method: "GET" })
       totalForCategory = Number(rawCounts[data.category] ?? 0) || 0;
     }
 
-
     const entries: RawLeadCacheRow[] = (rows ?? []).map((entry) => ({
       row_key: entry.row_key,
       id: (entry as Record<string, unknown>).id as string,
@@ -300,15 +310,24 @@ export const fetchRawLeadCache = createServerFn({ method: "GET" })
       lead_link: entry.lead_link,
       sheet_row: entry.sheet_row,
       assigned_to: entry.assigned_to,
-      assigned_myself_at: (entry as Record<string, unknown>).assigned_myself_at as string | null ?? null,
-      duplicate_detected: ((entry as Record<string, unknown>).duplicate_detected as boolean | null) ?? null,
-      duplicate_reason: ((entry as Record<string, unknown>).duplicate_reason as string | null) ?? null,
-      duplicate_match_type: ((entry as Record<string, unknown>).duplicate_match_type as string | null) ?? null,
+      assigned_myself_at:
+        ((entry as Record<string, unknown>).assigned_myself_at as string | null) ?? null,
+      duplicate_detected:
+        ((entry as Record<string, unknown>).duplicate_detected as boolean | null) ?? null,
+      duplicate_reason:
+        ((entry as Record<string, unknown>).duplicate_reason as string | null) ?? null,
+      duplicate_match_type:
+        ((entry as Record<string, unknown>).duplicate_match_type as string | null) ?? null,
       duplicate_key: ((entry as Record<string, unknown>).duplicate_key as string | null) ?? null,
-      duplicate_of_raw_lead_id: ((entry as Record<string, unknown>).duplicate_of_raw_lead_id as string | null) ?? null,
-      duplicate_of_qualified_lead_id: ((entry as Record<string, unknown>).duplicate_of_qualified_lead_id as string | null) ?? null,
-      canonical_post_id: ((entry as Record<string, unknown>).canonical_post_id as string | null) ?? null,
-      canonical_lead_link: ((entry as Record<string, unknown>).canonical_lead_link as string | null) ?? null,
+      duplicate_of_raw_lead_id:
+        ((entry as Record<string, unknown>).duplicate_of_raw_lead_id as string | null) ?? null,
+      duplicate_of_qualified_lead_id:
+        ((entry as Record<string, unknown>).duplicate_of_qualified_lead_id as string | null) ??
+        null,
+      canonical_post_id:
+        ((entry as Record<string, unknown>).canonical_post_id as string | null) ?? null,
+      canonical_lead_link:
+        ((entry as Record<string, unknown>).canonical_lead_link as string | null) ?? null,
     }));
 
     return {
@@ -369,12 +388,14 @@ export const fetchRawLeadKeyset = createServerFn({ method: "GET" })
     const columns =
       "id, row_key, data, lead, phone, category, captured_at, lead_link, sheet_row, assigned_to, assigned_myself_at, duplicate_detected, duplicate_reason, duplicate_match_type, duplicate_key, duplicate_of_raw_lead_id, duplicate_of_qualified_lead_id, canonical_post_id, canonical_lead_link";
 
-    const applyCategory = <T extends {
-      is: (...a: never[]) => T;
-      eq: (...a: never[]) => T;
-      not: (...a: never[]) => T;
-      or: (...a: never[]) => T;
-    }>(
+    const applyCategory = <
+      T extends {
+        is: (...a: never[]) => T;
+        eq: (...a: never[]) => T;
+        not: (...a: never[]) => T;
+        or: (...a: never[]) => T;
+      },
+    >(
       query: T,
       category: CategoryFilter,
     ): T => {
@@ -404,9 +425,7 @@ export const fetchRawLeadKeyset = createServerFn({ method: "GET" })
     };
 
     // Paged data
-    let dataQuery = context.supabase
-      .from("raw_lead_cache")
-      .select(columns);
+    let dataQuery = context.supabase.from("raw_lead_cache").select(columns);
 
     if (data.direction === "next") {
       dataQuery = dataQuery
@@ -415,7 +434,9 @@ export const fetchRawLeadKeyset = createServerFn({ method: "GET" })
         .limit(data.limit + 1);
 
       if (data.cursor) {
-        dataQuery = dataQuery.or(buildRawLeadKeysetFilter(data.cursor, "next") as never) as typeof dataQuery;
+        dataQuery = dataQuery.or(
+          buildRawLeadKeysetFilter(data.cursor, "next") as never,
+        ) as typeof dataQuery;
       }
     } else if (data.direction === "previous") {
       dataQuery = dataQuery
@@ -424,7 +445,9 @@ export const fetchRawLeadKeyset = createServerFn({ method: "GET" })
         .limit(data.limit + 1);
 
       if (data.cursor) {
-        dataQuery = dataQuery.or(buildRawLeadKeysetFilter(data.cursor, "previous") as never) as typeof dataQuery;
+        dataQuery = dataQuery.or(
+          buildRawLeadKeysetFilter(data.cursor, "previous") as never,
+        ) as typeof dataQuery;
       }
     } else if (data.direction === "last") {
       // Reverse order to grab the absolute oldest chunk
@@ -499,15 +522,24 @@ export const fetchRawLeadKeyset = createServerFn({ method: "GET" })
       lead_link: entry.lead_link,
       sheet_row: entry.sheet_row,
       assigned_to: entry.assigned_to,
-      assigned_myself_at: (entry as Record<string, unknown>).assigned_myself_at as string | null ?? null,
-      duplicate_detected: ((entry as Record<string, unknown>).duplicate_detected as boolean | null) ?? null,
-      duplicate_reason: ((entry as Record<string, unknown>).duplicate_reason as string | null) ?? null,
-      duplicate_match_type: ((entry as Record<string, unknown>).duplicate_match_type as string | null) ?? null,
+      assigned_myself_at:
+        ((entry as Record<string, unknown>).assigned_myself_at as string | null) ?? null,
+      duplicate_detected:
+        ((entry as Record<string, unknown>).duplicate_detected as boolean | null) ?? null,
+      duplicate_reason:
+        ((entry as Record<string, unknown>).duplicate_reason as string | null) ?? null,
+      duplicate_match_type:
+        ((entry as Record<string, unknown>).duplicate_match_type as string | null) ?? null,
       duplicate_key: ((entry as Record<string, unknown>).duplicate_key as string | null) ?? null,
-      duplicate_of_raw_lead_id: ((entry as Record<string, unknown>).duplicate_of_raw_lead_id as string | null) ?? null,
-      duplicate_of_qualified_lead_id: ((entry as Record<string, unknown>).duplicate_of_qualified_lead_id as string | null) ?? null,
-      canonical_post_id: ((entry as Record<string, unknown>).canonical_post_id as string | null) ?? null,
-      canonical_lead_link: ((entry as Record<string, unknown>).canonical_lead_link as string | null) ?? null,
+      duplicate_of_raw_lead_id:
+        ((entry as Record<string, unknown>).duplicate_of_raw_lead_id as string | null) ?? null,
+      duplicate_of_qualified_lead_id:
+        ((entry as Record<string, unknown>).duplicate_of_qualified_lead_id as string | null) ??
+        null,
+      canonical_post_id:
+        ((entry as Record<string, unknown>).canonical_post_id as string | null) ?? null,
+      canonical_lead_link:
+        ((entry as Record<string, unknown>).canonical_lead_link as string | null) ?? null,
     }));
 
     return {
@@ -541,12 +573,14 @@ export const fetchRawLeadKeysetCount = createServerFn({ method: "GET" })
 
     const isAdmin = roles.includes("admin") || roles.includes("sub_admin");
 
-    const applyCategory = <T extends {
-      is: (...a: never[]) => T;
-      eq: (...a: never[]) => T;
-      not: (...a: never[]) => T;
-      or: (...a: never[]) => T;
-    }>(
+    const applyCategory = <
+      T extends {
+        is: (...a: never[]) => T;
+        eq: (...a: never[]) => T;
+        not: (...a: never[]) => T;
+        or: (...a: never[]) => T;
+      },
+    >(
       query: T,
       category: CategoryFilter,
     ): T => {
@@ -615,7 +649,6 @@ export const fetchRawLeadCounts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => z.object({}).parse(input ?? {}))
   .handler(async ({ context }) => {
-    
     const { data: rolesData, error: rolesError } = await context.supabase
       .from("user_roles")
       .select("role")
@@ -650,7 +683,9 @@ export const fetchRawLeadCounts = createServerFn({ method: "GET" })
       .eq("created_by" as never, context.userId as never)
       .eq("source_type" as never, "raw_lead" as never)
       .not("source_lead_id" as never, "is" as never, null as never);
-    const draftedIdsForCounts = ((draftRowsForCounts ?? []) as Array<{ source_lead_id: string | null }>)
+    const draftedIdsForCounts = (
+      (draftRowsForCounts ?? []) as Array<{ source_lead_id: string | null }>
+    )
       .map((r) => r.source_lead_id)
       .filter((v): v is string => !!v);
 
@@ -677,7 +712,6 @@ export const fetchRawLeadCounts = createServerFn({ method: "GET" })
       assigned_myself: Math.max(0, num("assigned_myself") - draftedAssignedMyself),
     };
   });
-
 
 export const checkDuplicatePhone = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -735,14 +769,15 @@ export const checkDuplicatePhone = createServerFn({ method: "GET" })
     if (detailsError) throw new Error(detailsError.message);
 
     const detailsById = new Map(
-      ((details as Array<{
-        id: string;
-        service: string | null;
-        context: string | null;
-        main_area: string | null;
-        sub_area: string | null;
-        original_lead_link: string | null;
-      }> | null) ?? []
+      (
+        (details as Array<{
+          id: string;
+          service: string | null;
+          context: string | null;
+          main_area: string | null;
+          sub_area: string | null;
+          original_lead_link: string | null;
+        }> | null) ?? []
       ).map((detail) => [detail.id, detail]),
     );
 

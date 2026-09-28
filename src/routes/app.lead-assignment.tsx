@@ -8,13 +8,27 @@ import { RouteSkeleton } from "@/components/route-skeleton";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -42,7 +56,11 @@ export const Route = createFileRoute("/app/lead-assignment")({
 
 type Preset = "today" | "7d" | "30d" | "custom";
 
-function rangeFor(preset: Preset, customFrom: string, customTo: string): { from: string | null; to: string | null } {
+function rangeFor(
+  preset: Preset,
+  customFrom: string,
+  customTo: string,
+): { from: string | null; to: string | null } {
   if (preset === "custom") {
     return {
       from: customFrom ? new Date(customFrom).toISOString() : null,
@@ -52,7 +70,11 @@ function rangeFor(preset: Preset, customFrom: string, customTo: string): { from:
   const now = new Date();
   const to = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).toISOString();
   const days = preset === "today" ? 1 : preset === "7d" ? 7 : 30;
-  const from = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (days - 1)).toISOString();
+  const from = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - (days - 1),
+  ).toISOString();
   return { from, to };
 }
 
@@ -114,7 +136,6 @@ function AssignmentsTab() {
     refetchOnWindowFocus: false,
   });
 
-
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StateAssignmentRow | null>(null);
 
@@ -151,7 +172,10 @@ function AssignmentsTab() {
         </div>
         <Button
           size="sm"
-          onClick={() => { setEditing(null); setDialogOpen(true); }}
+          onClick={() => {
+            setEditing(null);
+            setDialogOpen(true);
+          }}
         >
           <Plus className="w-4 h-4 mr-1" /> Assign States
         </Button>
@@ -164,56 +188,82 @@ function AssignmentsTab() {
               {(rowsQ.error as Error)?.message ?? "Unknown error"}
             </div>
           </div>
-          <Button size="sm" variant="outline" onClick={() => rowsQ.refetch()} disabled={rowsQ.isFetching}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => rowsQ.refetch()}
+            disabled={rowsQ.isFetching}
+          >
             {rowsQ.isFetching ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
             Retry
           </Button>
         </div>
       ) : (
-      <div className="rounded-md border overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>State</TableHead>
-              <TableHead>Assigned CS User</TableHead>
-              <TableHead className="text-right">Total Leads</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rowsQ.isLoading ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading…</TableCell></TableRow>
-            ) : (rowsQ.data ?? []).length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">No states assigned yet.</TableCell></TableRow>
-            ) : (
-              rowsQ.data!.map((r) => (
-                <TableRow key={r.state_code}>
-                  <TableCell className="font-medium">
-                    {r.state_name} <span className="text-muted-foreground text-xs">({r.state_code})</span>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{r.cs_user_name ?? "—"}</div>
-                    <div className="text-xs text-muted-foreground">{r.cs_user_email ?? ""}</div>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{r.total_leads}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="outline" onClick={() => { setEditing(r); setDialogOpen(true); }}>
-                        <Pencil className="w-3.5 h-3.5 mr-1" /> Change
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleRemove(r)} disabled={removeMut.isPending}>
-                        <Trash2 className="w-3.5 h-3.5 text-destructive" />
-                      </Button>
-                    </div>
+        <div className="rounded-md border overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>State</TableHead>
+                <TableHead>Assigned CS User</TableHead>
+                <TableHead className="text-right">Total Leads</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rowsQ.isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8">
+                    <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                    Loading…
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ) : (rowsQ.data ?? []).length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground text-sm">
+                    No states assigned yet.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rowsQ.data!.map((r) => (
+                  <TableRow key={r.state_code}>
+                    <TableCell className="font-medium">
+                      {r.state_name}{" "}
+                      <span className="text-muted-foreground text-xs">({r.state_code})</span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">{r.cs_user_name ?? "—"}</div>
+                      <div className="text-xs text-muted-foreground">{r.cs_user_email ?? ""}</div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{r.total_leads}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditing(r);
+                            setDialogOpen(true);
+                          }}
+                        >
+                          <Pencil className="w-3.5 h-3.5 mr-1" /> Change
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemove(r)}
+                          disabled={removeMut.isPending}
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       )}
-
 
       <AssignDialog
         open={dialogOpen}
@@ -231,7 +281,12 @@ function AssignmentsTab() {
 }
 
 function AssignDialog({
-  open, onOpenChange, team, existing, editing, onSaved,
+  open,
+  onOpenChange,
+  team,
+  existing,
+  editing,
+  onSaved,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -259,10 +314,11 @@ function AssignDialog({
     return map;
   }, [existing, editing]);
 
-  const filtered = US_STATES.filter((s) =>
-    !filter ||
-    s.name.toLowerCase().includes(filter.toLowerCase()) ||
-    s.code.toLowerCase().includes(filter.toLowerCase()),
+  const filtered = US_STATES.filter(
+    (s) =>
+      !filter ||
+      s.name.toLowerCase().includes(filter.toLowerCase()) ||
+      s.code.toLowerCase().includes(filter.toLowerCase()),
   );
 
   const mut = useMutation({
@@ -284,17 +340,21 @@ function AssignDialog({
   });
 
   function toggle(code: string) {
-    setSelectedCodes((prev) => prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code]);
+    setSelectedCodes((prev) =>
+      prev.includes(code) ? prev.filter((c) => c !== code) : [...prev, code],
+    );
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>{editing ? `Change assignment — ${editing.state_name}` : "Assign States"}</DialogTitle>
+          <DialogTitle>
+            {editing ? `Change assignment — ${editing.state_name}` : "Assign States"}
+          </DialogTitle>
           <DialogDescription>
-            Select a CS user and one or more states. Reassigning a state affects only future incoming leads;
-            existing leads keep their current owner.
+            Select a CS user and one or more states. Reassigning a state affects only future
+            incoming leads; existing leads keep their current owner.
           </DialogDescription>
         </DialogHeader>
 
@@ -302,7 +362,9 @@ function AssignDialog({
           <div>
             <label className="text-xs font-medium text-muted-foreground">CS User</label>
             <Select value={csUserId} onValueChange={setCsUserId}>
-              <SelectTrigger><SelectValue placeholder="Select a CS user" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a CS user" />
+              </SelectTrigger>
               <SelectContent>
                 {team.map((m) => (
                   <SelectItem key={m.user_id} value={m.user_id}>
@@ -337,10 +399,16 @@ function AssignDialog({
                         ? "bg-primary text-primary-foreground border-primary"
                         : "bg-background hover:bg-muted"
                     }`}
-                    title={taken ? `Currently assigned to ${taken.cs_user_name ?? taken.cs_user_email ?? "another CS"}` : undefined}
+                    title={
+                      taken
+                        ? `Currently assigned to ${taken.cs_user_name ?? taken.cs_user_email ?? "another CS"}`
+                        : undefined
+                    }
                   >
                     <div className="font-medium">{s.name}</div>
-                    <div className={`text-[10px] ${selected ? "opacity-80" : "text-muted-foreground"}`}>
+                    <div
+                      className={`text-[10px] ${selected ? "opacity-80" : "text-muted-foreground"}`}
+                    >
                       {s.code}
                       {taken ? ` · ${taken.cs_user_name ?? taken.cs_user_email ?? "assigned"}` : ""}
                     </div>
@@ -349,13 +417,16 @@ function AssignDialog({
               })}
             </div>
             <div className="text-[11px] text-muted-foreground mt-2">
-              Reassigning a state currently owned by another CS will transfer it to the selected user for future leads only.
+              Reassigning a state currently owned by another CS will transfer it to the selected
+              user for future leads only.
             </div>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button onClick={() => mut.mutate()} disabled={mut.isPending}>
             {mut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             Save
@@ -388,7 +459,6 @@ function AnalyticsTab() {
     refetchOnWindowFocus: false,
   });
 
-
   const statusKeys = Object.keys(STATUS_LABEL);
 
   return (
@@ -401,14 +471,30 @@ function AnalyticsTab() {
             variant={preset === p ? "default" : "outline"}
             onClick={() => setPreset(p)}
           >
-            {p === "today" ? "Today" : p === "7d" ? "Last 7 Days" : p === "30d" ? "Last 30 Days" : "Custom"}
+            {p === "today"
+              ? "Today"
+              : p === "7d"
+                ? "Last 7 Days"
+                : p === "30d"
+                  ? "Last 30 Days"
+                  : "Custom"}
           </Button>
         ))}
         {preset === "custom" && (
           <>
-            <Input type="date" className="h-8 w-40" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+            <Input
+              type="date"
+              className="h-8 w-40"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+            />
             <span className="text-muted-foreground text-xs">to</span>
-            <Input type="date" className="h-8 w-40" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+            <Input
+              type="date"
+              className="h-8 w-40"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+            />
           </>
         )}
       </div>
@@ -424,10 +510,15 @@ function AnalyticsTab() {
           <Button
             size="sm"
             variant="outline"
-            onClick={() => { if (stateQ.isError) stateQ.refetch(); if (userQ.isError) userQ.refetch(); }}
+            onClick={() => {
+              if (stateQ.isError) stateQ.refetch();
+              if (userQ.isError) userQ.refetch();
+            }}
             disabled={stateQ.isFetching || userQ.isFetching}
           >
-            {(stateQ.isFetching || userQ.isFetching) ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+            {stateQ.isFetching || userQ.isFetching ? (
+              <Loader2 className="w-4 h-4 animate-spin mr-1" />
+            ) : null}
             Retry
           </Button>
         </div>
@@ -443,27 +534,47 @@ function AnalyticsTab() {
                 <TableHead>CS User</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 {statusKeys.map((k) => (
-                  <TableHead key={k} className="text-right whitespace-nowrap">{STATUS_LABEL[k]}</TableHead>
+                  <TableHead key={k} className="text-right whitespace-nowrap">
+                    {STATUS_LABEL[k]}
+                  </TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {stateQ.isLoading ? (
-                <TableRow><TableCell colSpan={3 + statusKeys.length} className="text-center py-6"><Loader2 className="w-4 h-4 inline animate-spin" /></TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={3 + statusKeys.length} className="text-center py-6">
+                    <Loader2 className="w-4 h-4 inline animate-spin" />
+                  </TableCell>
+                </TableRow>
               ) : (stateQ.data ?? []).length === 0 ? (
-                <TableRow><TableCell colSpan={3 + statusKeys.length} className="text-center py-6 text-sm text-muted-foreground">No assignments yet.</TableCell></TableRow>
+                <TableRow>
+                  <TableCell
+                    colSpan={3 + statusKeys.length}
+                    className="text-center py-6 text-sm text-muted-foreground"
+                  >
+                    No assignments yet.
+                  </TableCell>
+                </TableRow>
               ) : (
                 stateQ.data!.map((r) => (
                   <TableRow key={r.state_code}>
-                    <TableCell className="font-medium">{r.state_name} <span className="text-xs text-muted-foreground">({r.state_code})</span></TableCell>
+                    <TableCell className="font-medium">
+                      {r.state_name}{" "}
+                      <span className="text-xs text-muted-foreground">({r.state_code})</span>
+                    </TableCell>
                     <TableCell className="text-sm">{r.cs_user_name ?? "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{r.total_leads}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {r.total_leads}
+                    </TableCell>
                     {statusKeys.map((k) => {
                       const v = r.by_status?.[k] ?? 0;
                       return (
                         <TableCell key={k} className="text-right tabular-nums">
                           {v > 0 ? (
-                            <span className={`inline-block px-1.5 py-0.5 rounded border text-xs ${STATUS_TONE[k] ?? ""}`}>
+                            <span
+                              className={`inline-block px-1.5 py-0.5 rounded border text-xs ${STATUS_TONE[k] ?? ""}`}
+                            >
                               {v}
                             </span>
                           ) : (
@@ -497,9 +608,17 @@ function AnalyticsTab() {
             </TableHeader>
             <TableBody>
               {userQ.isLoading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-6"><Loader2 className="w-4 h-4 inline animate-spin" /></TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-6">
+                    <Loader2 className="w-4 h-4 inline animate-spin" />
+                  </TableCell>
+                </TableRow>
               ) : (userQ.data ?? []).length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-6 text-sm text-muted-foreground">No data for this range.</TableCell></TableRow>
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-6 text-sm text-muted-foreground">
+                    No data for this range.
+                  </TableCell>
+                </TableRow>
               ) : (
                 userQ.data!.map((u) => (
                   <TableRow key={u.cs_user_id}>
@@ -510,17 +629,26 @@ function AnalyticsTab() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1 max-w-64">
                         {u.assigned_states.map((c) => (
-                          <Badge key={c} variant="secondary" className="text-[10px]">{c}</Badge>
+                          <Badge key={c} variant="secondary" className="text-[10px]">
+                            {c}
+                          </Badge>
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">{u.total_leads}</TableCell>
-                    <TableCell className="text-right tabular-nums text-green-600">{u.processed_leads}</TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {u.total_leads}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-green-600">
+                      {u.processed_leads}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{u.pending_leads}</TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1 max-w-72">
                         {Object.entries(u.by_state).map(([code, n]) => (
-                          <span key={code} className="text-[10px] px-1.5 py-0.5 rounded border bg-muted/50">
+                          <span
+                            key={code}
+                            className="text-[10px] px-1.5 py-0.5 rounded border bg-muted/50"
+                          >
                             {code}: <span className="font-medium tabular-nums">{n}</span>
                           </span>
                         ))}
@@ -529,8 +657,12 @@ function AnalyticsTab() {
                     <TableCell>
                       <div className="flex flex-wrap gap-1 max-w-80">
                         {Object.entries(u.by_status).map(([k, n]) => (
-                          <span key={k} className={`text-[10px] px-1.5 py-0.5 rounded border ${STATUS_TONE[k] ?? ""}`}>
-                            {STATUS_LABEL[k] ?? k}: <span className="font-medium tabular-nums">{n}</span>
+                          <span
+                            key={k}
+                            className={`text-[10px] px-1.5 py-0.5 rounded border ${STATUS_TONE[k] ?? ""}`}
+                          >
+                            {STATUS_LABEL[k] ?? k}:{" "}
+                            <span className="font-medium tabular-nums">{n}</span>
                           </span>
                         ))}
                       </div>

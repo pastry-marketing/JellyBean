@@ -19,14 +19,8 @@ async function getFFmpeg() {
       const baseURL = `${window.location.origin}/ffmpeg`;
 
       await ffmpeg.load({
-        coreURL: await toBlobURL(
-          `${baseURL}/ffmpeg-core.js`,
-          "text/javascript"
-        ),
-        wasmURL: await toBlobURL(
-          wasmAsset.url,
-          "application/wasm"
-        ),
+        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(wasmAsset.url, "application/wasm"),
       });
 
       ffmpegInstance = ffmpeg;
@@ -100,10 +94,10 @@ export async function compressVideoInBrowser(
     // Extract extension or default to mp4
     const extMatch = name.match(/\.([^.]+)$/);
     const ext = extMatch ? extMatch[1].toLowerCase() : "mp4";
-    
+
     inputName = `input_${Date.now()}.${ext}`;
     outputName = `compressed_${Date.now()}.mp4`;
-    
+
     await ffmpeg.writeFile(inputName, await fetchFile(file));
 
     // Compression command:
@@ -134,7 +128,7 @@ export async function compressVideoInBrowser(
     }
 
     const data = await ffmpeg.readFile(outputName);
-    
+
     // Clean up memory
     await ffmpeg.deleteFile(inputName);
     await ffmpeg.deleteFile(outputName);
@@ -146,8 +140,16 @@ export async function compressVideoInBrowser(
       ffmpeg.off("progress", progressHandler);
       ffmpeg.off("log", logHandler);
       // Try to clean up files just in case
-      try { await ffmpeg.deleteFile(inputName); } catch (e) {}
-      try { await ffmpeg.deleteFile(outputName); } catch (e) {}
+      try {
+        await ffmpeg.deleteFile(inputName);
+      } catch (e) {
+        // intentionally empty
+      }
+      try {
+        await ffmpeg.deleteFile(outputName);
+      } catch (e) {
+        // intentionally empty
+      }
     }
     if (signal) {
       signal.removeEventListener("abort", abortHandler);

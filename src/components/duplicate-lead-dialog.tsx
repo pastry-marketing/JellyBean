@@ -52,14 +52,20 @@ export function DuplicateLeadDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-2xl">
         <AlertDialogHeader>
-          <AlertDialogTitle>This number already exists. Do you still want to continue?</AlertDialogTitle>
+          <AlertDialogTitle>
+            This number already exists. Do you still want to continue?
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            The phone number you entered matches recent qualified leads. Review the previous lead details below before you continue.
+            The phone number you entered matches recent qualified leads. Review the previous lead
+            details below before you continue.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <div className="space-y-3 max-h-[50vh] overflow-y-auto text-[12.5px]">
           {matches.map(({ source, match }) => (
-            <div key={`${source}-${match.id}`} className="rounded-lg border border-destructive/25 bg-destructive/5 p-3 space-y-2">
+            <div
+              key={`${source}-${match.id}`}
+              className="rounded-lg border border-destructive/25 bg-destructive/5 p-3 space-y-2"
+            >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="font-semibold text-destructive">{source} duplicate</div>
                 <div className="text-muted-foreground">
@@ -70,10 +76,7 @@ export function DuplicateLeadDialog({
                 <DetailField label="Customer" value={match.customer_name} />
                 <DetailField label="Primary Number" value={formatPhone(match.customer_number)} />
                 <DetailField label="Second Number" value={formatPhone(match.customer_number_2)} />
-                <DetailField
-                  label="Area"
-                  value={match.main_area || match.sub_area || "—"}
-                />
+                <DetailField label="Area" value={match.main_area || match.sub_area || "—"} />
                 <DetailField label="Service" value={match.service || "—"} />
                 <DetailField label="Lead ID" value={match.id} />
               </div>

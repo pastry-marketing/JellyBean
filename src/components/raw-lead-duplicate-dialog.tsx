@@ -67,7 +67,11 @@ type MissingMatch = {
   reason: string | null;
 };
 
-type MatchState = (RawMatch & { fallback?: boolean }) | QualifiedMatch | SnapshotMatch | MissingMatch;
+type MatchState =
+  | (RawMatch & { fallback?: boolean })
+  | QualifiedMatch
+  | SnapshotMatch
+  | MissingMatch;
 
 function rawCategoryLocation(row: RawMatch["data"]): string {
   const c = (row.category || "").toLowerCase();
@@ -162,7 +166,12 @@ export function RawLeadDuplicateDialog({
           });
         } else if (payload.type === "raw" && payload.data) {
           const raw = payload.data as RawMatch["data"];
-          setMatchData({ type: "raw", data: raw, location: rawCategoryLocation(raw), fallback: !!payload.fallback });
+          setMatchData({
+            type: "raw",
+            data: raw,
+            location: rawCategoryLocation(raw),
+            fallback: !!payload.fallback,
+          });
         } else if (payload.type === "snapshot" && payload.data) {
           setMatchData({
             type: "snapshot",
@@ -226,7 +235,9 @@ export function RawLeadDuplicateDialog({
             {currentLead.duplicate_match_type && (
               <span className="ml-1">
                 Match type:{" "}
-                <span className="font-medium text-foreground">{currentLead.duplicate_match_type}</span>
+                <span className="font-medium text-foreground">
+                  {currentLead.duplicate_match_type}
+                </span>
               </span>
             )}
           </DialogDescription>
@@ -253,7 +264,9 @@ export function RawLeadDuplicateDialog({
                 ]}
               />
               <div className="mt-3">
-                <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">Post Text</span>
+                <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">
+                  Post Text
+                </span>
                 <p className="text-[12px] whitespace-pre-wrap text-foreground/90">{curText}</p>
               </div>
             </section>
@@ -291,7 +304,9 @@ export function RawLeadDuplicateDialog({
 
               {!isLoadingMatch && !matchData && (
                 <p className="text-[12px] text-muted-foreground italic">
-                  {loadError || currentLead.duplicate_reason || "Previous lead details could not be loaded."}
+                  {loadError ||
+                    currentLead.duplicate_reason ||
+                    "Previous lead details could not be loaded."}
                 </p>
               )}
 
@@ -299,7 +314,10 @@ export function RawLeadDuplicateDialog({
                 <>
                   <DetailGrid
                     items={[
-                      { label: "Account Name", value: matchData.data.data?.["Account Name"] || "—" },
+                      {
+                        label: "Account Name",
+                        value: matchData.data.data?.["Account Name"] || "—",
+                      },
                       {
                         label: "Sub Area / Neighborhood",
                         value: matchData.data.data?.["Sub Area / Neighborhood"] || "—",
@@ -312,7 +330,9 @@ export function RawLeadDuplicateDialog({
                     ]}
                   />
                   <div className="mt-3">
-                    <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">Post Text</span>
+                    <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">
+                      Post Text
+                    </span>
                     <p className="text-[12px] whitespace-pre-wrap text-foreground/90">
                       {matchData.data.data?.["Post Text"] || "—"}
                     </p>
@@ -326,7 +346,12 @@ export function RawLeadDuplicateDialog({
                     items={[
                       { label: "Customer Name", value: matchData.data.customer_name || "—" },
                       { label: "Sub Area / Neighborhood", value: matchData.data.sub_area || "—" },
-                      { label: "Forwarded / Assigned At", value: formatDateTime(matchData.data.assigned_at || matchData.data.created_at) },
+                      {
+                        label: "Forwarded / Assigned At",
+                        value: formatDateTime(
+                          matchData.data.assigned_at || matchData.data.created_at,
+                        ),
+                      },
                       { label: "Phone", value: matchData.data.customer_number || "—" },
                       { label: "CS Status", value: matchData.data.cs_status || "—" },
                       {
@@ -339,7 +364,9 @@ export function RawLeadDuplicateDialog({
                     ]}
                   />
                   <div className="mt-3">
-                    <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">Post Text</span>
+                    <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">
+                      Post Text
+                    </span>
                     <p className="text-[12px] whitespace-pre-wrap text-foreground/90">
                       {matchData.data.post_text || "—"}
                     </p>
@@ -350,21 +377,30 @@ export function RawLeadDuplicateDialog({
               {matchData?.type === "snapshot" && (
                 <>
                   <p className="text-[12px] text-amber-700 dark:text-amber-400 mb-3">
-                    Original lead is no longer available. Showing details captured when the duplicate was detected.
+                    Original lead is no longer available. Showing details captured when the
+                    duplicate was detected.
                   </p>
                   <DetailGrid
                     items={[
                       { label: "Account Name", value: matchData.data.account_name || "—" },
                       { label: "Sub Area / Neighborhood", value: matchData.data.sub_area || "—" },
-                      { label: "Posted Date & Time", value: matchData.data.posted_date_time || "—" },
-                      { label: "Original Location", value: matchData.data.original_location || "—" },
+                      {
+                        label: "Posted Date & Time",
+                        value: matchData.data.posted_date_time || "—",
+                      },
+                      {
+                        label: "Original Location",
+                        value: matchData.data.original_location || "—",
+                      },
                       { label: "Match Type", value: labelForMatchType(matchData.match_type) },
                       { label: "Matched Key", value: matchData.duplicate_key || "—" },
                     ]}
                   />
                   {matchData.data.post_text ? (
                     <div className="mt-3">
-                      <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">Post Text</span>
+                      <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">
+                        Post Text
+                      </span>
                       <p className="text-[12px] whitespace-pre-wrap text-foreground/90">
                         {matchData.data.post_text}
                       </p>
@@ -388,7 +424,6 @@ export function RawLeadDuplicateDialog({
                 </>
               )}
             </section>
-
 
             {currentLead.duplicate_reason && (
               <p className="text-[11.5px] text-muted-foreground">
@@ -419,7 +454,9 @@ function DetailGrid({ items }: { items: Array<{ label: string; value: string }> 
     <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-[12px]">
       {items.map((item) => (
         <div key={item.label}>
-          <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">{item.label}</span>
+          <span className="text-muted-foreground block mb-0.5 text-[10px] uppercase">
+            {item.label}
+          </span>
           <span className="font-medium truncate block" title={item.value}>
             {item.value}
           </span>

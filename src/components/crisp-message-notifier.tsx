@@ -78,9 +78,7 @@ export function CrispMessageNotifier() {
   const navigate = useNavigate();
 
   const isCsAdmin =
-    primaryRole === "cs_admin" ||
-    roles.includes("cs_admin") ||
-    roles.includes("admin");
+    primaryRole === "cs_admin" || roles.includes("cs_admin") || roles.includes("admin");
 
   const seenMsgIdsRef = useRef<Set<string>>(new Set());
   const [activeQueue, setActiveQueue] = useState<QueuedMessageAlert[]>([]);
@@ -95,7 +93,10 @@ export function CrispMessageNotifier() {
 
   const handleDismissAll = () => {
     if (user?.id && activeQueue.length > 0) {
-      addDismissedNotificationKeys(user.id, activeQueue.map((a) => a.id));
+      addDismissedNotificationKeys(
+        user.id,
+        activeQueue.map((a) => a.id),
+      );
     }
     setActiveQueue([]);
   };
@@ -126,7 +127,9 @@ export function CrispMessageNotifier() {
       const validUnread = unreadConvs.filter((c) => !isCrispMaskedMessage(c.last_message));
       if (validUnread.length === 0) return;
 
-      const websiteIds = Array.from(new Set(validUnread.map((c) => c.crisp_website_id).filter(Boolean)));
+      const websiteIds = Array.from(
+        new Set(validUnread.map((c) => c.crisp_website_id).filter(Boolean)),
+      );
       const wsMap = new Map<string, string>();
       if (websiteIds.length > 0) {
         const { data: wsRows } = await supabase
@@ -154,7 +157,10 @@ export function CrispMessageNotifier() {
             : conv.last_message || "New unread customer message";
 
         const receivedAt = conv.last_message_at
-          ? new Date(conv.last_message_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          ? new Date(conv.last_message_at).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            })
           : new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
         newAlerts.push({
@@ -215,7 +221,13 @@ export function CrispMessageNotifier() {
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "crisp_messages" },
         async (payload) => {
-          const newMsg = payload.new as any;
+          const newMsg = payload.new as {
+            id?: string;
+            direction?: string;
+            sender_type?: string;
+            content?: string;
+            conversation_id?: string;
+          };
           if (!newMsg?.id) return;
 
           // Only notify on incoming customer messages
@@ -278,7 +290,7 @@ export function CrispMessageNotifier() {
           // Play chime and push to persistent center queue
           playCrispChime();
           setActiveQueue((prev) => [...prev, alertItem]);
-        }
+        },
       )
       .subscribe();
 
@@ -305,18 +317,21 @@ export function CrispMessageNotifier() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold tracking-tight text-foreground">New Crisp Message</h3>
+                <h3 className="text-sm font-bold tracking-tight text-foreground">
+                  New Crisp Message
+                </h3>
                 {queueLength > 1 && (
                   <Badge
                     variant="outline"
                     className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary border-primary/30 flex items-center gap-1 font-semibold"
                   >
-                    <Layers className="h-3 w-3" />
-                    1 of {queueLength}
+                    <Layers className="h-3 w-3" />1 of {queueLength}
                   </Badge>
                 )}
               </div>
-              <p className="text-[11px] text-muted-foreground">Received at {currentItem.receivedAt}</p>
+              <p className="text-[11px] text-muted-foreground">
+                Received at {currentItem.receivedAt}
+              </p>
             </div>
           </div>
 
@@ -332,11 +347,17 @@ export function CrispMessageNotifier() {
         {/* Workspace & Customer */}
         <div className="flex items-center justify-between gap-2 bg-muted/40 p-2.5 rounded-xl border border-border/30">
           <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Customer</div>
-            <div className="text-sm font-semibold text-foreground truncate">{currentItem.customerName}</div>
+            <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Customer
+            </div>
+            <div className="text-sm font-semibold text-foreground truncate">
+              {currentItem.customerName}
+            </div>
           </div>
           <div className="text-right shrink-0">
-            <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Workspace</div>
+            <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+              Workspace
+            </div>
             <Badge
               variant="secondary"
               className="text-[11px] font-medium bg-emerald-500/15 text-emerald-400 border-emerald-500/30"

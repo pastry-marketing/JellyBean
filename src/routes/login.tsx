@@ -105,9 +105,9 @@ function LoginPage() {
         }
       }
       navigate({ to: "/app" });
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      const msg = err?.message || String(err);
+      const msg = (err as Error)?.message || String(err);
       toast.error(msg === "{}" ? "An unexpected error occurred" : msg);
     } finally {
       setSubmitting(false);
@@ -123,7 +123,13 @@ function LoginPage() {
           <div>
             <div className="flex items-center gap-3">
               <div className="h-11 w-11 rounded-2xl bg-white/95 ring-1 ring-white/30 grid place-items-center shadow-sm overflow-hidden">
-                <img src={jellybeanLogo} alt="JellyBean logo" width={44} height={44} className="h-8 w-8 object-contain" />
+                <img
+                  src={jellybeanLogo}
+                  alt="JellyBean logo"
+                  width={44}
+                  height={44}
+                  className="h-8 w-8 object-contain"
+                />
               </div>
               <div>
                 <div className="text-lg font-semibold tracking-tight">JellyBean</div>
@@ -155,7 +161,13 @@ function LoginPage() {
         <section className="p-7 sm:p-10 md:p-12 bg-card/72">
           <div className="md:hidden mb-8 flex items-center gap-3">
             <div className="h-11 w-11 rounded-2xl bg-primary grid place-items-center overflow-hidden">
-              <img src={jellybeanLogo} alt="JellyBean logo" width={44} height={44} className="h-8 w-8 object-contain" />
+              <img
+                src={jellybeanLogo}
+                alt="JellyBean logo"
+                width={44}
+                height={44}
+                className="h-8 w-8 object-contain"
+              />
             </div>
             <div>
               <div className="text-lg font-semibold tracking-tight">JellyBean</div>
@@ -172,17 +184,22 @@ function LoginPage() {
                 </div>
                 <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed">
                   Your computer's clock is out of sync with our servers by about{" "}
-                  <strong>{Math.round(Math.abs(skewSeconds) / 60)} minutes</strong>.
-                  This causes security validation checks to fail, leading to rapid logouts (HTTP 429 Too Many Requests).
+                  <strong>{Math.round(Math.abs(skewSeconds) / 60)} minutes</strong>. This causes
+                  security validation checks to fail, leading to rapid logouts (HTTP 429 Too Many
+                  Requests).
                 </p>
                 <p className="text-xs font-medium mt-1">
-                  <strong>To fix this:</strong> Open your device's <strong>Date & Time settings</strong> and turn on <strong>"Set time automatically"</strong>, then refresh this page.
+                  <strong>To fix this:</strong> Open your device's{" "}
+                  <strong>Date & Time settings</strong> and turn on{" "}
+                  <strong>"Set time automatically"</strong>, then refresh this page.
                 </p>
               </div>
             )}
 
             <div className="mb-8">
-              <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-primary">Welcome back</p>
+              <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-primary">
+                Welcome back
+              </p>
               <h1 className="mt-2 text-[30px] leading-tight font-bold tracking-[-0.02em]">
                 Sign in to your workspace
               </h1>

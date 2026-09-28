@@ -61,14 +61,17 @@ serve(async (req) => {
     const providedKey = url.searchParams.get("key");
 
     if (!providedKey) {
-      return new Response(JSON.stringify({ error: "Unauthorized: Missing webhook secret key (?key=)" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Missing webhook secret key (?key=)" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    let body: any;
+    let body: Record<string, unknown>;
 
     try {
       body = JSON.parse(rawBody);
@@ -99,22 +102,33 @@ serve(async (req) => {
 
     if (wsErr || !wsRecord?.enabled || !wsRecord.credential_secret_id) {
       return new Response(
-        JSON.stringify({ error: "Unauthorized: workspace is missing, disabled, or not configured." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Unauthorized: workspace is missing, disabled, or not configured.",
+        }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const { data: secretData, error: secretErr } = await supabase.rpc("crisp_get_workspace_secret", {
-      p_secret_id: wsRecord.credential_secret_id,
-    });
+    const { data: secretData, error: secretErr } = await supabase.rpc(
+      "crisp_get_workspace_secret",
+      {
+        p_secret_id: wsRecord.credential_secret_id,
+      },
+    );
 
-    const storedWebhookSecret = (secretData as any)?.webhook_secret || (secretData as any)?.webhookSecret;
+    const storedWebhookSecret =
+      (secretData as Record<string, unknown>)?.webhook_secret ||
+      (secretData as Record<string, unknown>)?.webhookSecret;
 
-    if (secretErr || !storedWebhookSecret || !timingSafeEqual(providedKey, storedWebhookSecret)) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: webhook key mismatch." }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (
+      secretErr ||
+      !storedWebhookSecret ||
+      !timingSafeEqual(providedKey, storedWebhookSecret as string)
+    ) {
+      return new Response(JSON.stringify({ error: "Unauthorized: webhook key mismatch." }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Update last_seen_at (best effort, do not fail on error)
@@ -126,10 +140,13 @@ serve(async (req) => {
     const sessionId = data.session_id || body.session_id;
 
     if (!sessionId) {
-      return new Response(JSON.stringify({ status: "success", message: "Event processed (no session_id)" }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ status: "success", message: "Event processed (no session_id)" }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // ─── EVENT CLASSIFICATION ───────────────────────────────────────────────
@@ -179,8 +196,11 @@ serve(async (req) => {
       if (existingEvt?.processed === true) {
         // Already fully processed — safe to acknowledge and return
         return new Response(
-          JSON.stringify({ status: "ignored", message: "Duplicate webhook event already processed" }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({
+            status: "ignored",
+            message: "Duplicate webhook event already processed",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
 
@@ -208,7 +228,12 @@ serve(async (req) => {
       if (!messageContent) {
         if (data.type === "file" || data.type === "attachment") {
           messageContent = "[File]";
-        } else if (data.type === "animation" || data.type === "picker" || data.type === "image" || data.type === "media") {
+        } else if (
+          data.type === "animation" ||
+          data.type === "picker" ||
+          data.type === "image" ||
+          data.type === "media"
+        ) {
           messageContent = "[Image]";
         } else if (data.type === "audio") {
           messageContent = "[Audio]";
@@ -222,13 +247,16 @@ serve(async (req) => {
       // 3. Upsert conversation (customer details + unread state)
       const { data: existingConv } = await supabase
         .from("crisp_conversations")
-        .select("id, customer_name, customer_email, customer_phone, customer_avatar, last_message, last_message_at, last_customer_unread_at, status, unread_count")
+        .select(
+          "id, customer_name, customer_email, customer_phone, customer_avatar, last_message, last_message_at, last_customer_unread_at, status, unread_count",
+        )
         .eq("crisp_website_id", websiteId)
         .eq("crisp_session_id", sessionId)
         .maybeSingle();
 
       const customerUser = data.user || body.user || {};
-      const incomingName = customerUser.nickname || customerUser.name || data.nickname || body.nickname || null;
+      const incomingName =
+        customerUser.nickname || customerUser.name || data.nickname || body.nickname || null;
       const incomingEmail = customerUser.email || data.email || body.email || null;
       const incomingPhone = customerUser.phone || data.phone || body.phone || null;
       const incomingAvatar = customerUser.avatar || data.avatar || body.avatar || null;
@@ -240,7 +268,9 @@ serve(async (req) => {
       const finalAvatar = incomingAvatar || existingConv?.customer_avatar || null;
       const finalState = incomingState || existingConv?.status || "unresolved";
 
-      const sentAt = data.timestamp ? new Date(data.timestamp).toISOString() : new Date().toISOString();
+      const sentAt = data.timestamp
+        ? new Date(data.timestamp).toISOString()
+        : new Date().toISOString();
 
       // ── IDEMPOTENT UNREAD COUNT ────────────────────────────────────────────
       // Check if a crisp_messages row for this message already exists BEFORE
@@ -271,14 +301,19 @@ serve(async (req) => {
         updatedUnread = 0;
       }
 
-      const lastMessage = isMessageEvent && messageContent ? messageContent : (existingConv?.last_message || null);
-      const lastMessageAt = isMessageEvent && messageContent ? sentAt : (existingConv?.last_message_at || sentAt);
+      const lastMessage =
+        isMessageEvent && messageContent ? messageContent : existingConv?.last_message || null;
+      const lastMessageAt =
+        isMessageEvent && messageContent ? sentAt : existingConv?.last_message_at || sentAt;
 
       // Set last_customer_unread_at ONLY on genuine NEW incoming customer messages
       // Operator messages or masked messages clear it
-      const lastCustomerUnreadAt = isCustomerMessage && !messageAlreadyExists && !isMaskedMsg
-        ? sentAt
-        : (updatedUnread > 0 ? (existingConv?.last_customer_unread_at || null) : null);
+      const lastCustomerUnreadAt =
+        isCustomerMessage && !messageAlreadyExists && !isMaskedMsg
+          ? sentAt
+          : updatedUnread > 0
+            ? existingConv?.last_customer_unread_at || null
+            : null;
 
       const { data: convData, error: convErr } = await supabase
         .from("crisp_conversations")
@@ -297,7 +332,7 @@ serve(async (req) => {
             unread_count: updatedUnread,
             updated_at: new Date().toISOString(),
           },
-          { onConflict: "crisp_website_id,crisp_session_id" }
+          { onConflict: "crisp_website_id,crisp_session_id" },
         )
         .select("id")
         .single();
@@ -346,16 +381,18 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify({ status: "success", session_id: sessionId, website_id: websiteId }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
-    } catch (processErr: any) {
+    } catch (processErr: unknown) {
       console.error("Webhook processing error:", processErr);
+      const processErrorMsg =
+        processErr instanceof Error ? processErr.message : "Webhook processing failed";
 
       // Leave processed: false and record error in the correct `error` column
       if (webhookEventId) {
         const { error: errUpdateErr } = await supabase
           .from("crisp_webhook_events")
-          .update({ processed: false, error: processErr.message })
+          .update({ processed: false, error: processErrorMsg })
           .eq("id", webhookEventId);
 
         if (errUpdateErr) {
@@ -363,19 +400,19 @@ serve(async (req) => {
         }
       }
 
-      return new Response(
-        JSON.stringify({ error: processErr.message || "Webhook processing failed" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      return new Response(JSON.stringify({ error: processErrorMsg }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Crisp webhook error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

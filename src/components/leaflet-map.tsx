@@ -128,7 +128,9 @@ function CoveragePopup({ account }: { account: PlacedAccount }) {
     <div className="text-[12.5px] min-w-[170px]">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Account name</div>
       <div className="font-semibold">{account.name}</div>
-      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mt-2">Account area</div>
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground mt-2">
+        Account area
+      </div>
       <div>{account.area ?? "-"}</div>
       <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
         <div>
@@ -142,7 +144,11 @@ function CoveragePopup({ account }: { account: PlacedAccount }) {
       </div>
       <div className="mt-2 text-[11px]">
         <div className="text-muted-foreground mb-0.5">Note</div>
-        <div className="font-medium whitespace-pre-wrap">{account.notes || <span className="text-muted-foreground italic font-normal">No note added</span>}</div>
+        <div className="font-medium whitespace-pre-wrap">
+          {account.notes || (
+            <span className="text-muted-foreground italic font-normal">No note added</span>
+          )}
+        </div>
       </div>
       {account.last_launched_at && (
         <div className="mt-2 text-[11px] text-muted-foreground">

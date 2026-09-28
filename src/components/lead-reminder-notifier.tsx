@@ -44,7 +44,10 @@ export function LeadReminderNotifier() {
     const leadIds = Array.from(new Set(rows.map((r) => r.lead_id)));
     const senderIds = Array.from(new Set(rows.map((r) => r.sender_user_id)));
     const [{ data: leads }, { data: profs }] = await Promise.all([
-      supabase.from("qualified_leads").select("id, customer_name, customer_number").in("id", leadIds),
+      supabase
+        .from("qualified_leads")
+        .select("id, customer_name, customer_number")
+        .in("id", leadIds),
       supabase.from("profiles").select("user_id, full_name, email").in("user_id", senderIds),
     ]);
     const leadMap = new Map((leads ?? []).map((l) => [l.id, l]));
@@ -135,7 +138,12 @@ export function LeadReminderNotifier() {
   if (!current) return null;
 
   return (
-    <Dialog open={true} onOpenChange={() => { /* modal — must acknowledge */ }}>
+    <Dialog
+      open={true}
+      onOpenChange={() => {
+        /* modal — must acknowledge */
+      }}
+    >
       <DialogContent
         className="max-w-md"
         onPointerDownOutside={(e) => e.preventDefault()}
@@ -148,9 +156,7 @@ export function LeadReminderNotifier() {
             </div>
             Lead Reminder
           </DialogTitle>
-          <DialogDescription>
-            A teammate sent you a reminder about a lead.
-          </DialogDescription>
+          <DialogDescription>A teammate sent you a reminder about a lead.</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">

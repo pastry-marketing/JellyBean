@@ -1115,48 +1115,47 @@ function Inner() {
       armedRef.current = true;
     }, 1500);
     const channel = supabase.channel(`cs-leads-new-ping-${crypto.randomUUID()}`);
-    (channel as unknown as { on: (...args: unknown[]) => typeof channel })
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "qualified_leads" },
-        (payload: {
-          new: {
-            id?: string;
-            customer_name?: string;
-            main_area?: string | null;
-            sub_area?: string | null;
-            context?: string | null;
-            marketing_notes?: string | null;
-          };
-        }) => {
-          if (!armedRef.current) return;
-          setNewLeadCount((current) => current + 1);
-          const name = payload.new?.customer_name ?? "incoming";
-          const area = payload.new?.main_area || payload.new?.sub_area || null;
-          playNotificationBeep();
-          showBrowserNotification("New lead forwarded to CS", area ? `${name} — ${area}` : name);
-          toast.success(`New lead: ${name}`, { duration: 8000 });
-          setIncomingLead({
-            name,
-            area,
-            context: payload.new?.context ?? null,
-            at: Date.now(),
-          });
+    (channel as unknown as { on: (...args: unknown[]) => typeof channel }).on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "qualified_leads" },
+      (payload: {
+        new: {
+          id?: string;
+          customer_name?: string;
+          main_area?: string | null;
+          sub_area?: string | null;
+          context?: string | null;
+          marketing_notes?: string | null;
+        };
+      }) => {
+        if (!armedRef.current) return;
+        setNewLeadCount((current) => current + 1);
+        const name = payload.new?.customer_name ?? "incoming";
+        const area = payload.new?.main_area || payload.new?.sub_area || null;
+        playNotificationBeep();
+        showBrowserNotification("New lead forwarded to CS", area ? `${name} — ${area}` : name);
+        toast.success(`New lead: ${name}`, { duration: 8000 });
+        setIncomingLead({
+          name,
+          area,
+          context: payload.new?.context ?? null,
+          at: Date.now(),
+        });
 
-          // Auto-rephrase new lead if toggle is enabled and marketing_notes is not yet set
-          if (autoRephraseEnabledRef.current && payload.new?.id && !payload.new?.marketing_notes) {
-            void autoRephraseLeadWithAi({ data: { leadId: payload.new.id } })
-              .then((res) => {
-                if (res?.success) {
-                  qc.invalidateQueries({ queryKey: ["cs_leads"] });
-                }
-              })
-              .catch(() => {});
-          }
+        // Auto-rephrase new lead if toggle is enabled and marketing_notes is not yet set
+        if (autoRephraseEnabledRef.current && payload.new?.id && !payload.new?.marketing_notes) {
+          void autoRephraseLeadWithAi({ data: { leadId: payload.new.id } })
+            .then((res) => {
+              if (res?.success) {
+                qc.invalidateQueries({ queryKey: ["cs_leads"] });
+              }
+            })
+            .catch(() => {});
+        }
 
-          qc.invalidateQueries({ queryKey: ["cs_leads"] });
-        },
-      );
+        qc.invalidateQueries({ queryKey: ["cs_leads"] });
+      },
+    );
     // NOTE: qualified_leads UPDATE events are handled globally by
     // useRealtimeSync (which invalidates ["cs_leads"]). We intentionally do
     // NOT re-subscribe to UPDATE here — a second binding would double the
@@ -3356,7 +3355,9 @@ function LeadDrawer({
                 <StatusPicker
                   value={status}
                   onChange={setStatus}
-                  disabled={busy || (!isAdmin && !isCs && (!assignedTo || auth.user?.id !== assignedTo))}
+                  disabled={
+                    busy || (!isAdmin && !isCs && (!assignedTo || auth.user?.id !== assignedTo))
+                  }
                 />
               </div>
               <div className="flex items-center gap-2 pt-1">

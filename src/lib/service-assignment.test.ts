@@ -84,9 +84,11 @@ describe("service assignment helpers", () => {
     const route = readFileSync("src/routes/app.lead-assignment.tsx", "utf8");
 
     expect(route).toContain('allow={["admin", "cs_admin"]}');
-    expect(route).toContain("<TabsTrigger value=\"assignments\">State Assignments</TabsTrigger>");
-    expect(route).toContain("<TabsTrigger value=\"service-assignment\">Service Assignment</TabsTrigger>");
-    expect(route).toContain("<TabsTrigger value=\"analytics\">Analytics</TabsTrigger>");
+    expect(route).toContain('<TabsTrigger value="assignments">State Assignments</TabsTrigger>');
+    expect(route).toContain(
+      '<TabsTrigger value="service-assignment">Service Assignment</TabsTrigger>',
+    );
+    expect(route).toContain('<TabsTrigger value="analytics">Analytics</TabsTrigger>');
   });
 
   it("keeps service routing in the existing qualified lead trigger path", () => {
@@ -95,7 +97,9 @@ describe("service assignment helpers", () => {
       "utf8",
     );
 
-    expect(migration).toContain("CREATE OR REPLACE FUNCTION public.tg_qualified_leads_route_by_state()");
+    expect(migration).toContain(
+      "CREATE OR REPLACE FUNCTION public.tg_qualified_leads_route_by_state()",
+    );
     expect(migration).not.toMatch(/CREATE\s+TRIGGER\s+qualified_leads_route_by_service/i);
     expect(migration.indexOf("IF NEW.assigned_to IS NOT NULL")).toBeLessThan(
       migration.indexOf("FROM public.service_assignments"),

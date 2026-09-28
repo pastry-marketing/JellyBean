@@ -4,7 +4,19 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const CRISP_ROLES = ["admin", "cs_admin", "cs"];
 
-async function assertCrispAccess(supabase: any, userId: string) {
+async function assertCrispAccess(
+  supabase: {
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => Promise<{ data: { role: string }[] | null; error: Error | null }>;
+      };
+    };
+  },
+  userId: string,
+) {
   const { data: roleRows, error: roleErr } = await supabase
     .from("user_roles")
     .select("role")
@@ -36,7 +48,8 @@ export const syncCrispHistory = createServerFn({ method: "POST" })
     if (data.websiteId) query = query.eq("crisp_website_id", data.websiteId);
 
     const { data: workspaces, error: wsErr } = await query;
-    if (wsErr) return { ok: false as const, error: `Could not load Crisp workspaces: ${wsErr.message}` };
+    if (wsErr)
+      return { ok: false as const, error: `Could not load Crisp workspaces: ${wsErr.message}` };
     if (!workspaces || workspaces.length === 0) {
       return { ok: false as const, error: "No enabled Crisp workspace is configured yet." };
     }
@@ -75,7 +88,8 @@ export const sendCrispMessage = createServerFn({ method: "POST" })
   .inputValidator((input: { conversationId: string; content: string }) => {
     const conversationId = String(input?.conversationId ?? "").trim();
     const content = String(input?.content ?? "").trim();
-    if (!conversationId || !content) throw new Error("conversationId and non-empty content are required");
+    if (!conversationId || !content)
+      throw new Error("conversationId and non-empty content are required");
     return { conversationId, content };
   })
   .handler(async ({ data, context }) => {
@@ -109,7 +123,12 @@ export const sendCrispMessage = createServerFn({ method: "POST" })
       {
         method: "POST",
         headers: crispHeaders(credsRes.creds),
-        body: JSON.stringify({ type: "text", from: "operator", origin: "chat", content: data.content }),
+        body: JSON.stringify({
+          type: "text",
+          from: "operator",
+          origin: "chat",
+          content: data.content,
+        }),
       },
     );
 
@@ -117,10 +136,17 @@ export const sendCrispMessage = createServerFn({ method: "POST" })
       return { ok: false as const, error: `Crisp API error: ${await crispErrorReason(res)}` };
     }
 
-    const payload: any = await res.json().catch(() => ({}));
-    const msg = payload?.data ?? payload;
+    const payload = (await res.json().catch(() => ({}))) as {
+      data?: { fingerprint?: string | number; timestamp?: string | number };
+    } & Record<string, unknown>;
+    const msg =
+      (payload?.data as
+        | { fingerprint?: string | number; timestamp?: string | number }
+        | undefined) ?? (payload as { fingerprint?: string | number; timestamp?: string | number });
     const crispMessageId = String(msg?.fingerprint ?? Date.now());
-    const sentAt = msg?.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString();
+    const sentAt = msg?.timestamp
+      ? new Date(msg.timestamp).toISOString()
+      : new Date().toISOString();
 
     await supabaseAdmin
       .from("crisp_conversations")
@@ -196,7 +222,11 @@ export const markCrispConversationRead = createServerFn({ method: "POST" })
 
     const { error: updErr } = await supabaseAdmin
       .from("crisp_conversations")
-      .update({ unread_count: 0, last_customer_unread_at: null, updated_at: new Date().toISOString() })
+      .update({
+        unread_count: 0,
+        last_customer_unread_at: null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", conv.id);
     if (updErr) return { ok: false as const, error: `Database update failed: ${updErr.message}` };
 
@@ -204,8 +234,19 @@ export const markCrispConversationRead = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-
-async function assertAdmin(supabase: any, userId: string) {
+async function assertAdmin(
+  supabase: {
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (
+          column: string,
+          value: string,
+        ) => Promise<{ data: { role: string }[] | null; error: Error | null }>;
+      };
+    };
+  },
+  userId: string,
+) {
   const { data: roleRows, error: roleErr } = await supabase
     .from("user_roles")
     .select("role")
@@ -245,11 +286,16 @@ async function verifyCrispCredentials(websiteId: string, tokenId: string, tokenK
     },
   });
 
-  const json: any = await res.json().catch(() => ({}));
+  const json = (await res.json().catch(() => ({}))) as {
+    reason?: string;
+    message?: string;
+    data?: { message?: string };
+  } & Record<string, unknown>;
 
   if (!res.ok) {
     const reason = json?.reason || json?.data?.message || json?.message || `HTTP ${res.status}`;
-    const details = json?.data?.message && json?.data?.message !== reason ? ` — ${json.data.message}` : "";
+    const details =
+      json?.data?.message && json?.data?.message !== reason ? ` — ${json.data.message}` : "";
 
     return {
       ok: false as const,
@@ -260,7 +306,7 @@ async function verifyCrispCredentials(websiteId: string, tokenId: string, tokenK
     };
   }
 
-  return { ok: true as const, info: json?.data ?? {} };
+  return { ok: true as const, info: (json?.data as Record<string, unknown>) ?? {} };
 }
 
 export const addCrispWorkspace = createServerFn({ method: "POST" })
@@ -269,7 +315,8 @@ export const addCrispWorkspace = createServerFn({ method: "POST" })
     const websiteId = String(input?.websiteId ?? "").trim();
     const tokenId = String(input?.tokenId ?? "").trim();
     const tokenKey = String(input?.tokenKey ?? "").trim();
-    if (!websiteId || !tokenId || !tokenKey) throw new Error("Website ID, API Identifier, and API Key are required");
+    if (!websiteId || !tokenId || !tokenKey)
+      throw new Error("Website ID, API Identifier, and API Key are required");
     return { websiteId, tokenId, tokenKey };
   })
   .handler(async ({ data, context }) => {
@@ -288,16 +335,22 @@ export const addCrispWorkspace = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (existingWsErr) {
-      return { ok: false as const, error: `Failed to read workspace record: ${existingWsErr.message}` };
+      return {
+        ok: false as const,
+        error: `Failed to read workspace record: ${existingWsErr.message}`,
+      };
     }
 
     let secretId = existingWs?.credential_secret_id ?? null;
     let webhookSecret = newWebhookSecret();
 
     if (secretId) {
-      const { data: current, error: currentErr } = await supabaseAdmin.rpc("crisp_get_workspace_secret", {
-        p_secret_id: secretId,
-      });
+      const { data: current, error: currentErr } = await supabaseAdmin.rpc(
+        "crisp_get_workspace_secret",
+        {
+          p_secret_id: secretId,
+        },
+      );
 
       if (currentErr || !current) {
         return {
@@ -306,14 +359,18 @@ export const addCrispWorkspace = createServerFn({ method: "POST" })
         };
       }
 
-      webhookSecret = (current as any)?.webhook_secret || webhookSecret;
+      webhookSecret =
+        ((current as Record<string, unknown>)?.webhook_secret as string) || webhookSecret;
 
-      const { data: updated, error: updErr } = await supabaseAdmin.rpc("crisp_update_workspace_secret", {
-        p_secret_id: secretId,
-        p_token_id: data.tokenId,
-        p_token_key: data.tokenKey,
-        p_webhook_secret: webhookSecret,
-      });
+      const { data: updated, error: updErr } = await supabaseAdmin.rpc(
+        "crisp_update_workspace_secret",
+        {
+          p_secret_id: secretId,
+          p_token_id: data.tokenId,
+          p_token_key: data.tokenKey,
+          p_webhook_secret: webhookSecret,
+        },
+      );
 
       if (updErr || updated !== true) {
         return {
@@ -322,19 +379,25 @@ export const addCrispWorkspace = createServerFn({ method: "POST" })
         };
       }
     } else {
-      const { data: newSecretId, error: vaultErr } = await supabaseAdmin.rpc("crisp_create_workspace_secret", {
-        p_website_id: data.websiteId,
-        p_token_id: data.tokenId,
-        p_token_key: data.tokenKey,
-        p_webhook_secret: webhookSecret,
-      });
+      const { data: newSecretId, error: vaultErr } = await supabaseAdmin.rpc(
+        "crisp_create_workspace_secret",
+        {
+          p_website_id: data.websiteId,
+          p_token_id: data.tokenId,
+          p_token_key: data.tokenKey,
+          p_webhook_secret: webhookSecret,
+        },
+      );
       if (vaultErr || !newSecretId) {
-        return { ok: false as const, error: `Failed to store credentials: ${vaultErr?.message ?? "unknown error"}` };
+        return {
+          ok: false as const,
+          error: `Failed to store credentials: ${vaultErr?.message ?? "unknown error"}`,
+        };
       }
       secretId = newSecretId as unknown as string;
     }
 
-    const info: any = verified.info ?? {};
+    const info = (verified.info as { name?: string; domain?: string; logo?: string }) ?? {};
     const workspaceName = info.name ?? null;
 
     const { error: wsErr } = await supabaseAdmin.from("crisp_workspaces").upsert(
@@ -404,11 +467,16 @@ export const getCrispWorkspaceWebhookUrl = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Workspace credentials not found in Vault." };
     }
 
-    const { data: current, error: currentErr } = await supabaseAdmin.rpc("crisp_get_workspace_secret", {
-      p_secret_id: ws.credential_secret_id,
-    });
+    const { data: current, error: currentErr } = await supabaseAdmin.rpc(
+      "crisp_get_workspace_secret",
+      {
+        p_secret_id: ws.credential_secret_id,
+      },
+    );
 
-    const secret = (current as any)?.webhook_secret || (current as any)?.webhookSecret;
+    const secret =
+      ((current as Record<string, unknown>)?.webhook_secret as string) ||
+      ((current as Record<string, unknown>)?.webhookSecret as string);
 
     if (currentErr || !secret) {
       return {
@@ -439,15 +507,21 @@ export const regenerateCrispWebhookSecret = createServerFn({ method: "POST" })
       .maybeSingle();
 
     if (fetchErr || !ws?.credential_secret_id) {
-      return { ok: false as const, error: "Workspace credentials not found. Re-connect the workspace first." };
+      return {
+        ok: false as const,
+        error: "Workspace credentials not found. Re-connect the workspace first.",
+      };
     }
 
-    const { data: current, error: currentErr } = await supabaseAdmin.rpc("crisp_get_workspace_secret", {
-      p_secret_id: ws.credential_secret_id,
-    });
+    const { data: current, error: currentErr } = await supabaseAdmin.rpc(
+      "crisp_get_workspace_secret",
+      {
+        p_secret_id: ws.credential_secret_id,
+      },
+    );
 
-    const currentTokenId = (current as any)?.token_id ?? "";
-    const currentTokenKey = (current as any)?.token_key ?? "";
+    const currentTokenId = ((current as Record<string, unknown>)?.token_id as string) ?? "";
+    const currentTokenKey = ((current as Record<string, unknown>)?.token_key as string) ?? "";
 
     if (currentErr || !currentTokenId || !currentTokenKey) {
       return {
@@ -457,12 +531,15 @@ export const regenerateCrispWebhookSecret = createServerFn({ method: "POST" })
     }
 
     const secret = newWebhookSecret();
-    const { data: updated, error: updErr } = await supabaseAdmin.rpc("crisp_update_workspace_secret", {
-      p_secret_id: ws.credential_secret_id,
-      p_token_id: currentTokenId,
-      p_token_key: currentTokenKey,
-      p_webhook_secret: secret,
-    });
+    const { data: updated, error: updErr } = await supabaseAdmin.rpc(
+      "crisp_update_workspace_secret",
+      {
+        p_secret_id: ws.credential_secret_id,
+        p_token_id: currentTokenId,
+        p_token_key: currentTokenKey,
+        p_webhook_secret: secret,
+      },
+    );
 
     if (updErr || updated !== true) {
       return { ok: false as const, error: updErr?.message ?? "Vault update returned false" };
@@ -497,9 +574,12 @@ export const deleteCrispWorkspace = createServerFn({ method: "POST" })
 
     if (ws?.credential_secret_id) {
       // Remove Vault secret if present & verify result (Abort deletion if Vault secret cleanup fails)
-      const { data: deletedSecret, error: secretDelErr } = await supabaseAdmin.rpc("crisp_delete_workspace_secret", {
-        p_secret_id: ws.credential_secret_id,
-      });
+      const { data: deletedSecret, error: secretDelErr } = await supabaseAdmin.rpc(
+        "crisp_delete_workspace_secret",
+        {
+          p_secret_id: ws.credential_secret_id,
+        },
+      );
 
       if (secretDelErr || deletedSecret !== true) {
         return {
@@ -571,7 +651,8 @@ export const getCrispConversationNotes = createServerFn({ method: "POST" })
 
     const profilesMap = new Map<string, string>();
     (profiles || []).forEach((p) => {
-      const name = p.full_name?.trim() || p.username?.trim() || p.email?.split("@")[0] || "Team Member";
+      const name =
+        p.full_name?.trim() || p.username?.trim() || p.email?.split("@")[0] || "Team Member";
       profilesMap.set(p.user_id, name);
     });
 
@@ -705,7 +786,10 @@ export const deleteCrispConversationNote = createServerFn({ method: "POST" })
           .eq("user_id", note.created_by);
         const authorRoles = (authorRoleRows ?? []).map((r) => String(r.role));
         if (authorRoles.includes("admin")) {
-          return { ok: false as const, error: "Forbidden: CS Admin cannot delete notes written by an Admin." };
+          return {
+            ok: false as const,
+            error: "Forbidden: CS Admin cannot delete notes written by an Admin.",
+          };
         }
       }
     } else {

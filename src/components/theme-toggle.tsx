@@ -17,7 +17,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       title={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground hover:bg-surface hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring/35 focus:ring-offset-0",
-        className
+        className,
       )}
     >
       {theme === "light" ? (

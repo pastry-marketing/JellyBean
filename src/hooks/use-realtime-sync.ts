@@ -101,12 +101,11 @@ export function useRealtimeSync(role: AppRole | null) {
         (channel as unknown as { on: (...args: unknown[]) => typeof channel }).on(
           "postgres_changes",
           { event: "*", schema: "public", table: "shared_state" },
-          (payload: {
-            eventType: string;
-            new?: { key?: string; value?: unknown };
-          }) => {
+          (payload: { eventType: string; new?: { key?: string; value?: unknown } }) => {
             if (payload.new?.key === GOOGLE_SHEETS_SHARED_STATE_KEY) {
-              const cfg = payload.new.value as { webhookUrl?: string; autoSync?: boolean } | undefined;
+              const cfg = payload.new.value as
+                | { webhookUrl?: string; autoSync?: boolean }
+                | undefined;
               if (cfg && typeof cfg === "object") {
                 setGoogleSheetsConfigInMemory(cfg.webhookUrl, cfg.autoSync);
               }

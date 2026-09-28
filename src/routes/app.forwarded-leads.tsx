@@ -5,7 +5,23 @@ import { isCsUser } from "@/lib/cs-filter";
 import { RouteSkeleton } from "@/components/route-skeleton";
 import { useMemo, useState, useEffect } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CalendarRange, Edit3, Loader2, MapPin, Phone, RefreshCw, Search, Trash2, Lock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, Bell } from "lucide-react";
+import {
+  CalendarRange,
+  Edit3,
+  Loader2,
+  MapPin,
+  Phone,
+  RefreshCw,
+  Search,
+  Trash2,
+  Lock,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  ExternalLink,
+  Bell,
+} from "lucide-react";
 import { formatDistanceToNow, startOfDay, endOfDay } from "date-fns";
 import { toast } from "sonner";
 import { friendlyError } from "@/lib/error-messages";
@@ -37,7 +53,11 @@ import { cn } from "@/lib/utils";
 import { confirmDiscardUnsaved } from "@/components/confirm-dialog";
 import { LeadReminderDialog, type ReminderLeadInfo } from "@/components/lead-reminder-dialog";
 
-export const Route = createFileRoute("/app/forwarded-leads")({ component: Page, pendingComponent: () => <RouteSkeleton />, pendingMs: 200 });
+export const Route = createFileRoute("/app/forwarded-leads")({
+  component: Page,
+  pendingComponent: () => <RouteSkeleton />,
+  pendingMs: 200,
+});
 
 type Row = {
   id: string;
@@ -178,14 +198,11 @@ function Inner() {
     },
   });
 
-
   const allProfiles = useQuery({
     queryKey: ["all_profiles"],
     enabled: isAdmin,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, email");
+      const { data, error } = await supabase.from("profiles").select("user_id, full_name, email");
 
       if (error) throw error;
       return data ?? [];
@@ -220,7 +237,12 @@ function Inner() {
   }, [csTeam.data]);
 
   const list = useQuery({
-    queryKey: ["forwarded-leads", auth.user?.id, isAdmin, { page, dbDateFrom, dbDateTo, forwardedByFilter, outcomeFilter, dbSearch }],
+    queryKey: [
+      "forwarded-leads",
+      auth.user?.id,
+      isAdmin,
+      { page, dbDateFrom, dbDateTo, forwardedByFilter, outcomeFilter, dbSearch },
+    ],
     enabled: !!auth.user?.id,
     queryFn: async () => {
       const from = (page - 1) * PAGE_SIZE;
@@ -265,7 +287,12 @@ function Inner() {
   });
 
   const totalCount = useQuery({
-    queryKey: ["forwarded-leads-count", auth.user?.id, isAdmin, { dbDateFrom, dbDateTo, forwardedByFilter, outcomeFilter, dbSearch }],
+    queryKey: [
+      "forwarded-leads-count",
+      auth.user?.id,
+      isAdmin,
+      { dbDateFrom, dbDateTo, forwardedByFilter, outcomeFilter, dbSearch },
+    ],
     enabled: !!auth.user?.id,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
@@ -273,12 +300,15 @@ function Inner() {
       // Exact counting the whole table is expensive; fall back to the planner
       // estimate for the unfiltered view and keep exact counts for filters.
       const hasFilter = Boolean(
-        dbDateFrom || dbDateTo || dbSearch || outcomeFilter !== "all" || forwardedByFilter !== "all",
+        dbDateFrom ||
+        dbDateTo ||
+        dbSearch ||
+        outcomeFilter !== "all" ||
+        forwardedByFilter !== "all",
       );
       let q = supabase
         .from("qualified_leads")
         .select("id", { count: hasFilter ? "exact" : "planned", head: true });
-
 
       if (dbDateFrom) q = q.gte("assigned_at", dbDateFrom);
       if (dbDateTo) q = q.lte("assigned_at", dbDateTo);
@@ -357,100 +387,98 @@ function Inner() {
 
       <div className="crm-toolbar-panel">
         <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px] max-w-md">
-          <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search customer, area, phone..."
-            className="w-full h-9 pl-9 pr-3 rounded-md bg-surface border border-border text-[13px] placeholder:text-muted-foreground/70 focus:outline-none"
-          />
-        </div>
-        <Select
-          value={outcomeFilter}
-          onValueChange={(v) => setOutcomeFilter(v as typeof outcomeFilter)}
-        >
-          <SelectTrigger className="h-9 w-[180px] text-[12px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All outcomes</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            {OUTCOME_FILTERS.map((status) => (
-              <SelectItem key={status} value={status}>
-                {STATUS_LABEL[status]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {isAdmin && (
-          <Select value={forwardedByFilter} onValueChange={setForwardedByFilter}>
-            <SelectTrigger className="h-9 w-[190px] text-[12px]">
-              <SelectValue placeholder="Forwarded by" />
+          <div className="relative flex-1 min-w-[240px] max-w-md">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search customer, area, phone..."
+              className="w-full h-9 pl-9 pr-3 rounded-md bg-surface border border-border text-[13px] placeholder:text-muted-foreground/70 focus:outline-none"
+            />
+          </div>
+          <Select
+            value={outcomeFilter}
+            onValueChange={(v) => setOutcomeFilter(v as typeof outcomeFilter)}
+          >
+            <SelectTrigger className="h-9 w-[180px] text-[12px]">
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All forwarders</SelectItem>
-              {(allProfiles.data ?? [])
-                .slice()
-                .filter((profile) => !isCsUser(profile, csUserIds))
-                .sort((a, b) =>
-                  (a.full_name || a.email).localeCompare(b.full_name || b.email),
-                )
-                .map((profile) => (
-                  <SelectItem key={profile.user_id} value={profile.user_id}>
-                    {profile.full_name || profile.email}
-                  </SelectItem>
-                ))}
+              <SelectItem value="all">All outcomes</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              {OUTCOME_FILTERS.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {STATUS_LABEL[status]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
-        )}
-        <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 h-9">
-          <CalendarRange className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            aria-label="Forwarded from date"
-            className="h-7 w-[132px] border-0 bg-transparent px-1 text-[12px] shadow-none"
-          />
-          <span className="text-[11px] text-muted-foreground">to</span>
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            min={dateFrom || undefined}
-            aria-label="Forwarded to date"
-            className="h-7 w-[132px] border-0 bg-transparent px-1 text-[12px] shadow-none"
-          />
-        </div>
-        {(dateFrom || dateTo || forwardedByFilter !== "all") && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9"
-            onClick={() => {
-              setDateFrom("");
-              setDateTo("");
-              setForwardedByFilter("all");
-            }}
-          >
-            Clear filters
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 ml-auto"
-          onClick={() => qc.invalidateQueries({ queryKey: ["forwarded-leads"] })}
-          disabled={list.isFetching}
-        >
-          {list.isFetching ? (
-            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+          {isAdmin && (
+            <Select value={forwardedByFilter} onValueChange={setForwardedByFilter}>
+              <SelectTrigger className="h-9 w-[190px] text-[12px]">
+                <SelectValue placeholder="Forwarded by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All forwarders</SelectItem>
+                {(allProfiles.data ?? [])
+                  .slice()
+                  .filter((profile) => !isCsUser(profile, csUserIds))
+                  .sort((a, b) => (a.full_name || a.email).localeCompare(b.full_name || b.email))
+                  .map((profile) => (
+                    <SelectItem key={profile.user_id} value={profile.user_id}>
+                      {profile.full_name || profile.email}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           )}
-          Refresh
-        </Button>
+          <div className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-2 h-9">
+            <CalendarRange className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              aria-label="Forwarded from date"
+              className="h-7 w-[132px] border-0 bg-transparent px-1 text-[12px] shadow-none"
+            />
+            <span className="text-[11px] text-muted-foreground">to</span>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              min={dateFrom || undefined}
+              aria-label="Forwarded to date"
+              className="h-7 w-[132px] border-0 bg-transparent px-1 text-[12px] shadow-none"
+            />
+          </div>
+          {(dateFrom || dateTo || forwardedByFilter !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9"
+              onClick={() => {
+                setDateFrom("");
+                setDateTo("");
+                setForwardedByFilter("all");
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 ml-auto"
+            onClick={() => qc.invalidateQueries({ queryKey: ["forwarded-leads"] })}
+            disabled={list.isFetching}
+          >
+            {list.isFetching ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -540,25 +568,35 @@ function Inner() {
         </>
       )}
 
-      <Dialog open={!!editing} onOpenChange={(open) => {
-        if (!open) {
-          void confirmDiscardUnsaved(isDirty).then((ok) => { if (ok) setEditing(null); });
-        }
-      }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()}>
+      <Dialog
+        open={!!editing}
+        onOpenChange={(open) => {
+          if (!open) {
+            void confirmDiscardUnsaved(isDirty).then((ok) => {
+              if (ok) setEditing(null);
+            });
+          }
+        }}
+      >
+        <DialogContent
+          className="max-w-2xl max-h-[90vh] overflow-y-auto"
+          aria-describedby={undefined}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
           <DialogTitle className="sr-only">Edit Forwarded Lead</DialogTitle>
           {editing && (
             <UnifiedForwardedLeadForm
               lead={editing}
               onDirtyChange={setIsDirty}
-              forwardedBy={
-                (() => {
-                  const id = editing.created_by ?? editing.assigned_by;
-                  const profile = id ? profilesById.get(id) : null;
-                  return profile?.full_name || profile?.email || "Unknown user";
-                })()
-              }
-              onCancel={() => { setEditing(null); setIsDirty(false); }}
+              forwardedBy={(() => {
+                const id = editing.created_by ?? editing.assigned_by;
+                const profile = id ? profilesById.get(id) : null;
+                return profile?.full_name || profile?.email || "Unknown user";
+              })()}
+              onCancel={() => {
+                setEditing(null);
+                setIsDirty(false);
+              }}
               onSaved={() => {
                 setEditing(null);
                 setIsDirty(false);
@@ -573,7 +611,9 @@ function Inner() {
       <LeadReminderDialog
         lead={reminderLead}
         open={!!reminderLead}
-        onOpenChange={(o) => { if (!o) setReminderLead(null); }}
+        onOpenChange={(o) => {
+          if (!o) setReminderLead(null);
+        }}
       />
     </div>
   );
@@ -628,9 +668,7 @@ function ForwardedTable({
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="crm-data-row border-t border-border">
-              <td className="px-3 py-2 font-semibold text-foreground">
-                {r.customer_name}
-              </td>
+              <td className="px-3 py-2 font-semibold text-foreground">{r.customer_name}</td>
               <td className="px-3 py-2">
                 <span className="inline-flex items-center gap-1.5 flex-wrap">
                   <a
@@ -658,7 +696,9 @@ function ForwardedTable({
                 <div className="truncate">
                   {[r.service, r.pass_it_to].filter(Boolean).join(" / ")}
                 </div>
-                {r.context && <div className="truncate text-[11.5px] crm-muted-text">{r.context}</div>}
+                {r.context && (
+                  <div className="truncate text-[11.5px] crm-muted-text">{r.context}</div>
+                )}
               </td>
               <td className="px-3 py-2">
                 {r.original_lead_link ? (
@@ -694,8 +734,8 @@ function ForwardedTable({
                 <td className="px-3 py-2 text-muted-foreground">
                   {r.created_by || r.assigned_by
                     ? (profilesById.get(r.created_by ?? r.assigned_by!)?.full_name ??
-                       profilesById.get(r.created_by ?? r.assigned_by!)?.email ??
-                       "Unknown user")
+                      profilesById.get(r.created_by ?? r.assigned_by!)?.email ??
+                      "Unknown user")
                     : "-"}
                 </td>
               )}
@@ -757,7 +797,10 @@ function ForwardedTable({
                       </Button>
                     </>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 italic pr-2" title="Only pending leads can be modified by staff">
+                    <span
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 italic pr-2"
+                      title="Only pending leads can be modified by staff"
+                    >
                       <Lock className="h-3 w-3" /> Locked
                     </span>
                   )}
@@ -823,7 +866,10 @@ function UnifiedForwardedLeadForm({
           is_important: lead.pinned_important ? true : values.isImportant,
           is_landline: values.isLandline,
           images: [...(values.existingImages ?? []), ...uploadedImages],
-          original_lead_link: values.originalLeadLink !== undefined ? values.originalLeadLink : lead.original_lead_link,
+          original_lead_link:
+            values.originalLeadLink !== undefined
+              ? values.originalLeadLink
+              : lead.original_lead_link,
         } as never)
         .eq("id", lead.id);
       if (error) throw error;
@@ -878,8 +924,6 @@ function UnifiedForwardedLeadForm({
     />
   );
 }
-
-
 
 async function deleteForwardedLead(
   lead: Row,
