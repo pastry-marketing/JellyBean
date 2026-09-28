@@ -35,7 +35,10 @@ export function findServiceCategory(serviceName: string): string | null {
   return null;
 }
 
-export function toServiceSelection(serviceName: string, serviceCategory?: string | null): ServiceSelection {
+export function toServiceSelection(
+  serviceName: string,
+  serviceCategory?: string | null,
+): ServiceSelection {
   const trimmed = serviceName.trim();
   return {
     service_name: trimmed,
@@ -62,7 +65,10 @@ export function resolveServiceAssignmentOwner(
 ): string | null {
   const serviceKey = normalizeLeadService(service);
   if (!serviceKey) return null;
-  return assignments.find((assignment) => assignment.service_key === serviceKey)?.assigned_cs_user_id ?? null;
+  return (
+    assignments.find((assignment) => assignment.service_key === serviceKey)?.assigned_cs_user_id ??
+    null
+  );
 }
 
 export function resolveQualifiedLeadOwner({
@@ -79,5 +85,5 @@ export function resolveQualifiedLeadOwner({
   const serviceOwner = resolveServiceAssignmentOwner(lead.service, serviceAssignments);
   if (serviceOwner) return serviceOwner;
 
-  return lead.state_code ? stateAssignments[lead.state_code] ?? null : null;
+  return lead.state_code ? (stateAssignments[lead.state_code] ?? null) : null;
 }

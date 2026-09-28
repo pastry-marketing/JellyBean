@@ -1,9 +1,24 @@
 // Server-only Crisp helpers. These run inside the app server runtime and talk
 // to the Crisp REST API directly using per-workspace credentials stored in Vault.
 
+type QueryBuilder = {
+  select: (cols: string) => QueryBuilder;
+  eq: (col: string, val: unknown) => QueryBuilder;
+  maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: Error | null }>;
+  single: () => Promise<{ data: { id: string } | null; error: Error | null }>;
+  update: (data: unknown) => QueryBuilder;
+  upsert: (
+    data: unknown,
+    opts?: unknown,
+  ) => QueryBuilder & Promise<{ data: { id: string }[] | null; error: Error | null }>;
+};
+
 type AnyClient = {
-  from: (t: string) => any;
-  rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: any; error: any }>;
+  from: (t: string) => QueryBuilder;
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: Record<string, unknown> | null; error: Error | null }>;
 };
 
 export type CrispCreds = { tokenId: string; tokenKey: string };
@@ -18,7 +33,11 @@ export function crispHeaders(creds: CrispCreds) {
 }
 
 export async function crispErrorReason(res: Response) {
-  const json: any = await res.json().catch(() => ({}));
+  const json = (await res.json().catch(() => ({}))) as {
+    reason?: string;
+    message?: string;
+    data?: { message?: string };
+  } & Record<string, unknown>;
   return json?.reason || json?.data?.message || json?.message || `HTTP ${res.status}`;
 }
 
@@ -31,7 +50,10 @@ export async function getWorkspaceCreds(
   const tokenId = data?.token_id ?? data?.tokenId;
   const tokenKey = data?.token_key ?? data?.tokenKey;
   if (error || !tokenId || !tokenKey) {
-    return { ok: false, error: `Workspace credentials unavailable: ${error?.message ?? "missing token"}` };
+    return {
+      ok: false,
+      error: `Workspace credentials unavailable: ${error?.message ?? "missing token"}`,
+    };
   }
   return { ok: true, creds: { tokenId: String(tokenId), tokenKey: String(tokenKey) } };
 }
@@ -43,7 +65,7 @@ export function isCrispMaskedMessage(content: string | null | undefined): boolea
   return stripped.length >= 3 && /^x+$/i.test(stripped);
 }
 
-export function parseMessageContent(msg: any): string {
+export function parseMessageContent(msg: Record<string, unknown>): string {
   const raw = msg?.content;
   if (typeof raw === "string" && raw.trim()) return raw.trim();
   if (raw && typeof raw === "object") {
@@ -52,7 +74,8 @@ export function parseMessageContent(msg: any): string {
   }
   const type = msg?.type;
   if (type === "file" || type === "attachment") return "[File]";
-  if (type === "animation" || type === "picker" || type === "image" || type === "media") return "[Image]";
+  if (type === "animation" || type === "picker" || type === "image" || type === "media")
+    return "[Image]";
   if (type === "audio") return "[Audio]";
   return "[Attachment]";
 }
@@ -60,11 +83,17 @@ export function parseMessageContent(msg: any): string {
 /** Sync one Crisp workspace's recent conversations + messages into Supabase. */
 export async function syncWorkspace(
   admin: AnyClient,
-  ws: { id: string; crisp_website_id: string; workspace_name: string | null; credential_secret_id: string | null },
+  ws: {
+    id: string;
+    crisp_website_id: string;
+    workspace_name: string | null;
+    credential_secret_id: string | null;
+  },
   opts: { maxPages: number },
 ): Promise<{ conversations: number; messages: number; error?: string }> {
   const websiteId = ws.crisp_website_id;
-  if (!ws.credential_secret_id) return { conversations: 0, messages: 0, error: "No stored credentials for workspace" };
+  if (!ws.credential_secret_id)
+    return { conversations: 0, messages: 0, error: "No stored credentials for workspace" };
 
   const credsRes = await getWorkspaceCreds(admin, ws.credential_secret_id);
   if (!credsRes.ok) return { conversations: 0, messages: 0, error: credsRes.error };
@@ -77,9 +106,13 @@ export async function syncWorkspace(
     try {
       const infoRes = await fetch(`https://api.crisp.chat/v1/website/${websiteId}`, { headers });
       if (infoRes.ok) {
-        const info: any = await infoRes.json();
+        const info = (await infoRes.json()) as { data?: { name?: string } } & Record<
+          string,
+          unknown
+        >;
         const name = info?.data?.name;
-        if (name) await admin.from("crisp_workspaces").update({ workspace_name: name }).eq("id", ws.id);
+        if (name)
+          await admin.from("crisp_workspaces").update({ workspace_name: name }).eq("id", ws.id);
       }
     } catch {
       // Non-fatal
@@ -87,18 +120,34 @@ export async function syncWorkspace(
   }
 
   for (let page = 1; page <= opts.maxPages; page++) {
-    const listRes = await fetch(`https://api.crisp.chat/v1/website/${websiteId}/conversations/${page}`, { headers });
+    const listRes = await fetch(
+      `https://api.crisp.chat/v1/website/${websiteId}/conversations/${page}`,
+      { headers },
+    );
     if (!listRes.ok) {
       return { conversations, messages, error: await crispErrorReason(listRes) };
     }
-    const listJson: any = await listRes.json();
-    const sessions: any[] = Array.isArray(listJson?.data) ? listJson.data : [];
+    const listJson = (await listRes.json()) as { data?: Record<string, unknown>[] } & Record<
+      string,
+      unknown
+    >;
+    const sessions = (Array.isArray(listJson?.data) ? listJson.data : []) as Array<
+      {
+        session_id?: string;
+        meta?: Record<string, unknown>;
+        nickname?: string;
+        email?: string;
+        phone?: string;
+        avatar?: string;
+        state?: string;
+      } & Record<string, unknown>
+    >;
     if (sessions.length === 0) break;
 
     const CHUNK = 5;
     for (let i = 0; i < sessions.length; i += CHUNK) {
       await Promise.allSettled(
-        sessions.slice(i, i + CHUNK).map(async (session: any) => {
+        sessions.slice(i, i + CHUNK).map(async (session) => {
           const sessionId = session?.session_id;
           if (!sessionId) return;
           const meta = session.meta || {};
@@ -136,13 +185,25 @@ export async function syncWorkspace(
             { headers },
           );
           if (!msgsRes.ok) return;
-          const msgsJson: any = await msgsRes.json();
-          const list: any[] = Array.isArray(msgsJson?.data) ? msgsJson.data : [];
+          const msgsJson = (await msgsRes.json()) as { data?: Record<string, unknown>[] } & Record<
+            string,
+            unknown
+          >;
+          const list = (Array.isArray(msgsJson?.data) ? msgsJson.data : []) as Array<
+            { from?: string; timestamp?: number; type?: string; fingerprint?: string } & Record<
+              string,
+              unknown
+            >
+          >;
 
           if (list.length === 0) {
             await admin
               .from("crisp_conversations")
-              .update({ unread_count: 0, last_customer_unread_at: null, updated_at: new Date().toISOString() })
+              .update({
+                unread_count: 0,
+                last_customer_unread_at: null,
+                updated_at: new Date().toISOString(),
+              })
               .eq("id", conv.id);
             return;
           }
@@ -168,8 +229,8 @@ export async function syncWorkspace(
 
           const needsReply = Boolean(
             lastCustomerAt &&
-              !isCrispMaskedMessage(lastCustomerText) &&
-              (!lastOperatorTs || lastCustomerTs > lastOperatorTs),
+            !isCrispMaskedMessage(lastCustomerText) &&
+            (!lastOperatorTs || lastCustomerTs > lastOperatorTs),
           );
 
           const rows = list.map((msg) => {
@@ -183,7 +244,9 @@ export async function syncWorkspace(
               direction: isOperator ? "outgoing" : "incoming",
               content: parseMessageContent(msg),
               message_type: msg.type || "text",
-              sent_at: msg.timestamp ? new Date(msg.timestamp).toISOString() : new Date().toISOString(),
+              sent_at: msg.timestamp
+                ? new Date(msg.timestamp).toISOString()
+                : new Date().toISOString(),
               raw_payload: msg,
             };
           });
@@ -191,7 +254,10 @@ export async function syncWorkspace(
           // Bulk insert; duplicates are ignored by the existing table trigger/constraint.
           const { error: insErr, data: inserted } = await admin
             .from("crisp_messages")
-            .upsert(rows, { onConflict: "crisp_website_id,crisp_message_id", ignoreDuplicates: true })
+            .upsert(rows, {
+              onConflict: "crisp_website_id,crisp_message_id",
+              ignoreDuplicates: true,
+            })
             .select("id");
           if (!insErr) messages += inserted?.length ?? 0;
 

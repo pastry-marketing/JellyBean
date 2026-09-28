@@ -5,10 +5,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhone } from "@/lib/crm-lite";
-import {
-  extractNextdoorPostId,
-  canonicalizeLeadLink,
-} from "@/lib/lead-link-canonicalizer";
+import { extractNextdoorPostId, canonicalizeLeadLink } from "@/lib/lead-link-canonicalizer";
 import type { LeadDraft } from "@/lib/lead-drafts";
 import { autoRephraseLeadWithAi } from "@/lib/raw-leads-ai.functions";
 
@@ -51,10 +48,7 @@ function validateDraft(draft: LeadDraft): void {
   if (missing.length > 0) throw new DraftValidationError(missing);
 }
 
-export async function sendDraftToCS(
-  draft: LeadDraft,
-  ctx: SendDraftContext,
-): Promise<void> {
+export async function sendDraftToCS(draft: LeadDraft, ctx: SendDraftContext): Promise<void> {
   validateDraft(draft);
   const f = draft.form_data ?? {};
 
@@ -76,24 +70,19 @@ export async function sendDraftToCS(
   // Raw-lead drafts snapshot the underlying raw_lead_cache row so we can
   // preserve original_lead_link and canonical fields.
   const isRaw = draft.source_type === "raw_lead";
-  const snapshot = (f.entrySnapshot as
-    | { row_key?: string; id?: string | null; data?: Record<string, string> }
-    | undefined) ?? undefined;
+  const snapshot =
+    (f.entrySnapshot as
+      | { row_key?: string; id?: string | null; data?: Record<string, string> }
+      | undefined) ?? undefined;
   const rawRow = snapshot?.data ?? {};
   const rawLeadLink =
-    (f.originalLeadLink as string | null | undefined) ??
-    rawRow["Lead Link"] ??
-    null;
+    (f.originalLeadLink as string | null | undefined) ?? rawRow["Lead Link"] ?? null;
 
   // For manual submissions we mirror app.submit-lead: pass_it_to is null for
   // facebook/seo roles; for anyone else it echoes the service. For raw leads
   // pass_it_to always equals service, matching QualifyDialog.send().
   const role = (f.role as string | undefined) ?? ctx.actorRole ?? null;
-  const passItTo = isRaw
-    ? service
-    : role === "facebook" || role === "seo"
-      ? null
-      : service;
+  const passItTo = isRaw ? service : role === "facebook" || role === "seo" ? null : service;
 
   const insertPayload: Record<string, unknown> = {
     customer_name: customerName,

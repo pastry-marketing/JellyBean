@@ -86,7 +86,10 @@ export const listServiceAssignments = createServerFn({ method: "GET" })
 
 export const upsertStateAssignments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: { assignments: { state_code: string; state_name: string; cs_user_id: string }[] }) => input)
+  .inputValidator(
+    (input: { assignments: { state_code: string; state_name: string; cs_user_id: string }[] }) =>
+      input,
+  )
   .handler(async ({ context, data }) => {
     await requireAdmin(context.supabase, context.userId);
     if (data.assignments.length === 0) return { ok: true };
@@ -106,9 +109,11 @@ export const upsertStateAssignments = createServerFn({ method: "POST" })
 
 export const upsertServiceAssignments = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: {
-    assignments: { service_name: string; service_category?: string | null; cs_user_id: string }[];
-  }) => input)
+  .inputValidator(
+    (input: {
+      assignments: { service_name: string; service_category?: string | null; cs_user_id: string }[];
+    }) => input,
+  )
   .handler(async ({ context, data }) => {
     await requireAdmin(context.supabase, context.userId);
     if (!data.assignments || data.assignments.length === 0) {
@@ -178,10 +183,13 @@ export const getStateAnalytics = createServerFn({ method: "GET" })
   .inputValidator((input: { from?: string | null; to?: string | null }) => input)
   .handler(async ({ context, data }) => {
     await requireAdmin(context.supabase, context.userId);
-    const { data: rows, error } = await context.supabase.rpc("state_assignment_analytics" as never, {
-      _from: data.from ?? null,
-      _to: data.to ?? null,
-    } as never);
+    const { data: rows, error } = await context.supabase.rpc(
+      "state_assignment_analytics" as never,
+      {
+        _from: data.from ?? null,
+        _to: data.to ?? null,
+      } as never,
+    );
     if (error) throw new Error(error.message);
     return (rows ?? []) as StateAnalyticsRow[];
   });
@@ -191,10 +199,13 @@ export const getCsUserTotals = createServerFn({ method: "GET" })
   .inputValidator((input: { from?: string | null; to?: string | null }) => input)
   .handler(async ({ context, data }) => {
     await requireAdmin(context.supabase, context.userId);
-    const { data: rows, error } = await context.supabase.rpc("cs_user_assignment_totals" as never, {
-      _from: data.from ?? null,
-      _to: data.to ?? null,
-    } as never);
+    const { data: rows, error } = await context.supabase.rpc(
+      "cs_user_assignment_totals" as never,
+      {
+        _from: data.from ?? null,
+        _to: data.to ?? null,
+      } as never,
+    );
     if (error) throw new Error(error.message);
     return (rows ?? []) as CsUserTotalsRow[];
   });

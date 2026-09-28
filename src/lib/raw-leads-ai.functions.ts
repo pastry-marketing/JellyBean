@@ -74,7 +74,6 @@ type OpenAiResponse = {
   };
 };
 
-
 async function ensureRequesterCanAnalyze(userId: string) {
   const { data, error } = await supabaseAdmin
     .from("user_roles")
@@ -124,7 +123,6 @@ function extractOutputText(response: OpenAiResponse) {
   return parts.join("\n").trim();
 }
 
-
 function trimForAi(value: string) {
   const trimmed = value.trim();
   if (trimmed.length <= MAX_POST_TEXT_CHARS) return trimmed;
@@ -133,10 +131,7 @@ function trimForAi(value: string) {
 
 // Strict parser + completeness validator. Throws on any anomaly rather than
 // silently dropping a lead or defaulting a missing result to "no".
-export function parseAndValidateAiResults(
-  text: string,
-  rowKeys: string[],
-): RawLeadAiResult[] {
+export function parseAndValidateAiResults(text: string, rowKeys: string[]): RawLeadAiResult[] {
   let parsed: { results?: Array<{ id?: unknown; lead?: unknown }> };
   try {
     parsed = JSON.parse(text);
@@ -161,7 +156,9 @@ export function parseAndValidateAiResults(
       throw new Error(`AI returned duplicate id: ${item.id}`);
     }
     if (item.lead !== "yes" && item.lead !== "no") {
-      throw new Error(`AI returned invalid decision for id ${item.id}: ${JSON.stringify(item.lead)}`);
+      throw new Error(
+        `AI returned invalid decision for id ${item.id}: ${JSON.stringify(item.lead)}`,
+      );
     }
     seen.add(item.id);
     out.push({ row_key: rowKeys[Number(item.id) - 1], lead: item.lead });
@@ -254,7 +251,6 @@ async function classifyWithOpenAi({
     );
   }
   return text;
-
 }
 
 async function classifyBatch({
@@ -362,7 +358,6 @@ export const analyzeRawLeadsWithAi = createServerFn({ method: "POST" })
       results,
     };
   });
-
 
 export const checkOpenAiConfig = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -519,7 +514,7 @@ Forbidden Phrases (do not use in any field):
   };
 
   const extractSenderName = (templateText: string): string => {
-    const match = templateText.match(/this is\s+([A-Za-z0-9_'\-\s]+?)(?:[\.,\r\n]|$)/i);
+    const match = templateText.match(/this is\s+([A-Za-z0-9_'\-\s]+?)(?:[.,\r\n]|$)/i);
     if (match) {
       return match[1].trim();
     }
@@ -576,7 +571,7 @@ Forbidden Phrases (do not use in any field):
     clean = sanitizeForbiddenPhrases(clean);
     if (clean.length > 0) {
       clean = clean.charAt(0).toLowerCase() + clean.slice(1);
-      clean = clean.replace(/[\.\?,;!]$/, "");
+      clean = clean.replace(/[.?,;!]$/, "");
     }
     return clean.trim();
   };
@@ -673,7 +668,7 @@ export const autoRephraseLeadWithAi = createServerFn({ method: "POST" })
       toggleState?.value &&
       typeof toggleState.value === "object" &&
       !Array.isArray(toggleState.value) &&
-      (toggleState.value as { enabled?: boolean }).enabled
+      (toggleState.value as { enabled?: boolean }).enabled,
     );
 
     if (!isAutoRephraseOn) {
@@ -682,7 +677,9 @@ export const autoRephraseLeadWithAi = createServerFn({ method: "POST" })
 
     const { data: lead, error } = await supabaseAdmin
       .from("qualified_leads")
-      .select("id, customer_name, context, post_text, requirement_1, requirement_2, marketing_notes")
+      .select(
+        "id, customer_name, context, post_text, requirement_1, requirement_2, marketing_notes",
+      )
       .eq("id", data.leadId)
       .maybeSingle();
 

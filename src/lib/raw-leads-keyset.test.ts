@@ -1,5 +1,9 @@
 import { expect, test, describe } from "vitest";
-import { buildRawLeadKeysetFilter, calculateTotalPages, calculateLastPageSize } from "./raw-leads-keyset";
+import {
+  buildRawLeadKeysetFilter,
+  calculateTotalPages,
+  calculateLastPageSize,
+} from "./raw-leads-keyset";
 
 describe("buildRawLeadKeysetFilter", () => {
   describe("next direction", () => {
@@ -7,7 +11,7 @@ describe("buildRawLeadKeysetFilter", () => {
       const cursor = { captured_at: "2024-01-01T12:00:00Z", id: "123" };
       const filter = buildRawLeadKeysetFilter(cursor, "next");
       expect(filter).toBe(
-        'or(captured_at.lt."2024-01-01T12:00:00Z",and(captured_at.eq."2024-01-01T12:00:00Z",id.lt.123),captured_at.is.null)'
+        'or(captured_at.lt."2024-01-01T12:00:00Z",and(captured_at.eq."2024-01-01T12:00:00Z",id.lt.123),captured_at.is.null)',
       );
     });
 
@@ -23,7 +27,7 @@ describe("buildRawLeadKeysetFilter", () => {
       const cursor = { captured_at: "2024-01-01T12:00:00Z", id: "123" };
       const filter = buildRawLeadKeysetFilter(cursor, "previous");
       expect(filter).toBe(
-        'or(captured_at.gt."2024-01-01T12:00:00Z",and(captured_at.eq."2024-01-01T12:00:00Z",id.gt.123))'
+        'or(captured_at.gt."2024-01-01T12:00:00Z",and(captured_at.eq."2024-01-01T12:00:00Z",id.gt.123))',
       );
     });
 
@@ -59,4 +63,4 @@ describe("pagination math", () => {
   test("calculateLastPageSize returns 0 for empty list", () => {
     expect(calculateLastPageSize(0, 500)).toBe(0);
   });
-}); 
+});

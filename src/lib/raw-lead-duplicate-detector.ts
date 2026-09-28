@@ -40,7 +40,7 @@ export function calculateTextSimilarity(text1: string, text2: string): number {
 }
 
 export function buildVisibleRawLeadDuplicateMap(
-  shownRows: CacheEntry[]
+  shownRows: CacheEntry[],
 ): Record<string, FrontendDuplicateMatch[]> {
   const map: Record<string, FrontendDuplicateMatch[]> = {};
 
@@ -52,7 +52,7 @@ export function buildVisibleRawLeadDuplicateMap(
     for (let j = i + 1; j < shownRows.length; j++) {
       const a = shownRows[i];
       const b = shownRows[j];
-      
+
       // Safety skip
       if (a.row_key === b.row_key) continue;
 
@@ -85,7 +85,7 @@ export function buildVisibleRawLeadDuplicateMap(
 
 function checkMatch(
   a: CacheEntry,
-  b: CacheEntry
+  b: CacheEntry,
 ): { type: MatchType; score: number; reasons: string[] } | null {
   const reasons: string[] = [];
   let isExact = false;
@@ -151,7 +151,9 @@ function checkMatch(
   }
 
   if (textSimilarity >= 0.85 && (nameA === nameB || serviceA === serviceB)) {
-    reasons.push(`Lead text strongly similar with supporting signal (${Math.round(textSimilarity * 100)}%)`);
+    reasons.push(
+      `Lead text strongly similar with supporting signal (${Math.round(textSimilarity * 100)}%)`,
+    );
     return { type: "90% Similar", score: Math.round(textSimilarity * 100), reasons };
   }
 

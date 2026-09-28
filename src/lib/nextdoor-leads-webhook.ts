@@ -1,14 +1,12 @@
 const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Webhook-Secret, X-Webhook-Token, X-Api-Key, X-Requested-With, Accept, Origin",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Webhook-Secret, X-Webhook-Token, X-Api-Key, X-Requested-With, Accept, Origin",
   "Access-Control-Max-Age": "86400",
 };
 
-import {
-  extractNextdoorPostId,
-  canonicalizeLeadLink,
-} from "./lead-link-canonicalizer";
+import { extractNextdoorPostId, canonicalizeLeadLink } from "./lead-link-canonicalizer";
 
 const SCHEMA_VERSION = "2026-04-08.nd.v1";
 
@@ -45,7 +43,8 @@ function toSheetRow(row: ExtRow): Record<string, string> {
     "Sub Area / Neighborhood": row.subArea || (row["Sub Area / Neighborhood"] as string) || "",
     "Posted Date & Time": row.postDateTime || (row["Posted Date & Time"] as string) || "",
     "Post Text": row.postText || (row["Post Text"] as string) || "",
-    "Lead Link": row.finalLink || row.postLink || row.profileLink || (row["Lead Link"] as string) || "",
+    "Lead Link":
+      row.finalLink || row.postLink || row.profileLink || (row["Lead Link"] as string) || "",
     "Captured Date (UTC)": row.capturedDate || (row["Captured Date (UTC)"] as string) || "",
     "Captured Time (UTC)": row.capturedTime || (row["Captured Time (UTC)"] as string) || "",
     "Account Area": row.accountArea || (row["Account Area"] as string) || "",
@@ -64,7 +63,8 @@ function rowKey(row: ExtRow): string {
 }
 
 function capturedIso(row: ExtRow): string | null {
-  const source = row.captureDateTime || row.capturedDate || row["Captured Date (UTC)"] || row["Captured Date"];
+  const source =
+    row.captureDateTime || row.capturedDate || row["Captured Date (UTC)"] || row["Captured Date"];
   if (!source) return new Date().toISOString(); // Fallback to current time so it stays at the top
   const time = Date.parse(String(source));
   return Number.isNaN(time) ? new Date().toISOString() : new Date(time).toISOString();
@@ -138,14 +138,19 @@ async function logWebhookActivity(action: string, metadata: Record<string, unkno
   }
 }
 
-function isLegacyExtensionRequest(request: Request, body: Record<string, unknown>, bodyParsed: boolean) {
+function isLegacyExtensionRequest(
+  request: Request,
+  body: Record<string, unknown>,
+  bodyParsed: boolean,
+) {
   if (!bodyParsed || body.schemaVersion !== SCHEMA_VERSION) return false;
 
   const action = String(body.action ?? "");
   if (action !== "test_connection" && action !== "append_rows") return false;
 
   const origin = request.headers.get("Origin") || request.headers.get("origin") || "";
-  const isBrowserExtension = origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://");
+  const isBrowserExtension =
+    origin.startsWith("chrome-extension://") || origin.startsWith("moz-extension://");
 
   return isBrowserExtension;
 }
@@ -166,7 +171,8 @@ export async function handleNextdoorLeadsPost(request: Request) {
     //   - ?secret= / ?token= / ?key= query params
     //   - body fields: secret / token / apiKey / webhookSecret
     const url = new URL(request.url);
-    const authHeader = request.headers.get("Authorization") || request.headers.get("authorization") || "";
+    const authHeader =
+      request.headers.get("Authorization") || request.headers.get("authorization") || "";
     const bearer = authHeader.toLowerCase().startsWith("bearer ")
       ? authHeader.slice(7).trim()
       : authHeader.trim(); // some extensions send the raw secret with no "Bearer " prefix
@@ -208,7 +214,8 @@ export async function handleNextdoorLeadsPost(request: Request) {
       return json({ ok: false, reason: "server_misconfigured" }, 500);
     }
 
-    const legacyExtensionAccepted = !requestSecret && isLegacyExtensionRequest(request, body, bodyParsed);
+    const legacyExtensionAccepted =
+      !requestSecret && isLegacyExtensionRequest(request, body, bodyParsed);
 
     let secretsMatch = legacyExtensionAccepted;
     if (requestSecret) {
@@ -326,26 +333,72 @@ export async function handleNextdoorLeadsPost(request: Request) {
       const keys = unique.slice(index, index + chunkSize).map(({ key }) => key);
 
       // --- DUPLICATE DETECTION START ---
-      const postIds = Array.from(new Set(slice.map((r) => r.canonical_post_id).filter(Boolean))) as string[];
-      const leadLinks = Array.from(new Set(slice.map((r) => r.canonical_lead_link).filter(Boolean))) as string[];
+      const postIds = Array.from(
+        new Set(slice.map((r) => r.canonical_post_id).filter(Boolean)),
+      ) as string[];
+      const leadLinks = Array.from(
+        new Set(slice.map((r) => r.canonical_lead_link).filter(Boolean)),
+      ) as string[];
 
-      let existingRawPostIdRows: any[] = [];
-      let existingRawLinkRows: any[] = [];
-      let existingQualPostIdRows: any[] = [];
-      let existingQualLinkRows: any[] = [];
+      let existingRawPostIdRows: Array<{
+        id: string;
+        canonical_post_id?: string | null;
+        canonical_lead_link?: string | null;
+        row_key?: string | null;
+        data?: Record<string, string> | null;
+        category?: string | null;
+        captured_at?: string | null;
+        assigned_myself_at?: string | null;
+      }> = [];
+      let existingRawLinkRows: Array<{
+        id: string;
+        canonical_post_id?: string | null;
+        canonical_lead_link?: string | null;
+        row_key?: string | null;
+        data?: Record<string, string> | null;
+        category?: string | null;
+        captured_at?: string | null;
+        assigned_myself_at?: string | null;
+      }> = [];
+      let existingQualPostIdRows: Array<{
+        id: string;
+        canonical_post_id?: string | null;
+        canonical_lead_link?: string | null;
+        customer_name?: string | null;
+        sub_area?: string | null;
+        post_text?: string | null;
+        cs_status?: string | null;
+        created_at?: string | null;
+        assigned_at?: string | null;
+      }> = [];
+      let existingQualLinkRows: Array<{
+        id: string;
+        canonical_post_id?: string | null;
+        canonical_lead_link?: string | null;
+        customer_name?: string | null;
+        sub_area?: string | null;
+        post_text?: string | null;
+        cs_status?: string | null;
+        created_at?: string | null;
+        assigned_at?: string | null;
+      }> = [];
 
       // Bulk queries against raw_lead_cache
       if (postIds.length > 0) {
         const { data } = await supabaseAdmin
           .from("raw_lead_cache")
-          .select("id, canonical_post_id, canonical_lead_link, row_key, data, category, captured_at, assigned_myself_at")
+          .select(
+            "id, canonical_post_id, canonical_lead_link, row_key, data, category, captured_at, assigned_myself_at",
+          )
           .in("canonical_post_id", postIds);
         if (data) existingRawPostIdRows = data;
       }
       if (leadLinks.length > 0) {
         const { data } = await supabaseAdmin
           .from("raw_lead_cache")
-          .select("id, canonical_post_id, canonical_lead_link, row_key, data, category, captured_at, assigned_myself_at")
+          .select(
+            "id, canonical_post_id, canonical_lead_link, row_key, data, category, captured_at, assigned_myself_at",
+          )
           .in("canonical_lead_link", leadLinks);
         if (data) existingRawLinkRows = data;
       }
@@ -354,14 +407,18 @@ export async function handleNextdoorLeadsPost(request: Request) {
       if (postIds.length > 0) {
         const { data } = await supabaseAdmin
           .from("qualified_leads")
-          .select("id, canonical_post_id, canonical_lead_link, customer_name, sub_area, post_text, cs_status, created_at, assigned_at")
+          .select(
+            "id, canonical_post_id, canonical_lead_link, customer_name, sub_area, post_text, cs_status, created_at, assigned_at",
+          )
           .in("canonical_post_id", postIds);
         if (data) existingQualPostIdRows = data;
       }
       if (leadLinks.length > 0) {
         const { data } = await supabaseAdmin
           .from("qualified_leads")
-          .select("id, canonical_post_id, canonical_lead_link, customer_name, sub_area, post_text, cs_status, created_at, assigned_at")
+          .select(
+            "id, canonical_post_id, canonical_lead_link, customer_name, sub_area, post_text, cs_status, created_at, assigned_at",
+          )
           .in("canonical_lead_link", leadLinks);
         if (data) existingQualLinkRows = data;
       }
@@ -387,11 +444,19 @@ export async function handleNextdoorLeadsPost(request: Request) {
       }): Record<string, string | null> {
         const c = (rec.category || "").toLowerCase();
         const loc =
-          c === "forwarded" ? "Forwarded" :
-          c === "wrong" ? "Wrong Post" :
-          c === "not_found" ? "Number Not Found" :
-          c === "duplicate" ? "Duplicate" :
-          !c ? (rec.assigned_myself_at ? "Assigned Myself" : "New") : c;
+          c === "forwarded"
+            ? "Forwarded"
+            : c === "wrong"
+              ? "Wrong Post"
+              : c === "not_found"
+                ? "Number Not Found"
+                : c === "duplicate"
+                  ? "Duplicate"
+                  : !c
+                    ? rec.assigned_myself_at
+                      ? "Assigned Myself"
+                      : "New"
+                    : c;
         return {
           source: "raw",
           account_name: rec.data?.["Account Name"] ?? null,
@@ -422,7 +487,9 @@ export async function handleNextdoorLeadsPost(request: Request) {
           posted_date_time: null,
           post_text: rec.post_text ?? null,
           original_category: "forwarded",
-          original_location: rec.cs_status ? `Forwarded to CS · ${rec.cs_status}` : "Forwarded to CS",
+          original_location: rec.cs_status
+            ? `Forwarded to CS · ${rec.cs_status}`
+            : "Forwarded to CS",
           canonical_post_id: rec.canonical_post_id ?? null,
           canonical_lead_link: rec.canonical_lead_link ?? null,
           captured_at: rec.assigned_at ?? rec.created_at ?? null,
@@ -434,7 +501,9 @@ export async function handleNextdoorLeadsPost(request: Request) {
 
         // Priority 1: Canonical Post ID Match (existing qualified, then existing raw)
         if (!isDup && row.canonical_post_id) {
-          const qMatch = existingQualPostIdRows.find((q) => q.canonical_post_id === row.canonical_post_id);
+          const qMatch = existingQualPostIdRows.find(
+            (q) => q.canonical_post_id === row.canonical_post_id,
+          );
           if (qMatch) {
             isDup = true;
             row.duplicate_detected = true;
@@ -445,7 +514,7 @@ export async function handleNextdoorLeadsPost(request: Request) {
             row.duplicate_snapshot = snapshotFromQualified(qMatch);
           } else {
             const rMatch = existingRawPostIdRows.find(
-              (r) => r.canonical_post_id === row.canonical_post_id && r.row_key !== row.row_key
+              (r) => r.canonical_post_id === row.canonical_post_id && r.row_key !== row.row_key,
             );
             if (rMatch) {
               isDup = true;
@@ -461,7 +530,9 @@ export async function handleNextdoorLeadsPost(request: Request) {
 
         // Priority 2: Canonical Lead Link Match (existing qualified, then existing raw)
         if (!isDup && row.canonical_lead_link) {
-          const qMatch = existingQualLinkRows.find((q) => q.canonical_lead_link === row.canonical_lead_link);
+          const qMatch = existingQualLinkRows.find(
+            (q) => q.canonical_lead_link === row.canonical_lead_link,
+          );
           if (qMatch) {
             isDup = true;
             row.duplicate_detected = true;
@@ -472,7 +543,7 @@ export async function handleNextdoorLeadsPost(request: Request) {
             row.duplicate_snapshot = snapshotFromQualified(qMatch);
           } else {
             const rMatch = existingRawLinkRows.find(
-              (r) => r.canonical_lead_link === row.canonical_lead_link && r.row_key !== row.row_key
+              (r) => r.canonical_lead_link === row.canonical_lead_link && r.row_key !== row.row_key,
             );
             if (rMatch) {
               isDup = true;
@@ -520,7 +591,6 @@ export async function handleNextdoorLeadsPost(request: Request) {
         }
       }
 
-
       // Priority 3: Fallback — all four fields must match exactly (normalized)
       // when neither canonical_post_id nor canonical_lead_link produced a hit.
       // Narrow candidates via a single bulk query keyed by "Posted Date & Time"
@@ -530,8 +600,8 @@ export async function handleNextdoorLeadsPost(request: Request) {
         new Set(
           fallbackRows
             .map((r) => (r.data["Posted Date & Time"] || "").trim())
-            .filter((v) => v.length > 0)
-        )
+            .filter((v) => v.length > 0),
+        ),
       );
       let fallbackCandidates: Array<{
         id: string;
@@ -546,7 +616,9 @@ export async function handleNextdoorLeadsPost(request: Request) {
       if (postedTimes.length > 0) {
         const { data } = await supabaseAdmin
           .from("raw_lead_cache")
-          .select("id, row_key, data, category, captured_at, assigned_myself_at, canonical_post_id, canonical_lead_link")
+          .select(
+            "id, row_key, data, category, captured_at, assigned_myself_at, canonical_post_id, canonical_lead_link",
+          )
           .in("data->>Posted Date & Time", postedTimes);
         if (data) fallbackCandidates = data as never;
       }
@@ -590,7 +662,6 @@ export async function handleNextdoorLeadsPost(request: Request) {
       }
       // --- FALLBACK DETECTION END ---
       // --- DUPLICATE DETECTION END ---
-
 
       const { error } = await supabaseAdmin
         .from("raw_lead_cache")

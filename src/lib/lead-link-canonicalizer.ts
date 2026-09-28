@@ -31,7 +31,7 @@ export function normalizeLeadText(text: string | null | undefined): string {
     .toLowerCase()
     .trim()
     .replace(/[^\w\s]/g, "") // Remove punctuation
-    .replace(/\s+/g, " ");   // Collapse whitespace
+    .replace(/\s+/g, " "); // Collapse whitespace
 }
 
 export function normalizeName(text: string | null | undefined): string {
