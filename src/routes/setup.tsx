@@ -97,7 +97,13 @@ function SetupPage() {
           <div>
             <div className="flex items-center gap-3">
               <div className="h-11 w-11 rounded-2xl bg-card ring-1 ring-border/20 grid place-items-center overflow-hidden">
-                <img src={jellybeanLogo} alt="JellyBean logo" width={44} height={44} className="h-8 w-8 object-contain" />
+                <img
+                  src={jellybeanLogo}
+                  alt="JellyBean logo"
+                  width={44}
+                  height={44}
+                  className="h-8 w-8 object-contain"
+                />
               </div>
               <div>
                 <div className="font-bold tracking-tight text-primary-foreground">JellyBean</div>
@@ -128,7 +134,13 @@ function SetupPage() {
         <section className="p-7 sm:p-10 md:p-12">
           <div className="md:hidden mb-8 flex items-center gap-3">
             <div className="h-11 w-11 rounded-2xl bg-primary grid place-items-center overflow-hidden">
-              <img src={jellybeanLogo} alt="JellyBean logo" width={44} height={44} className="h-8 w-8 object-contain" />
+              <img
+                src={jellybeanLogo}
+                alt="JellyBean logo"
+                width={44}
+                height={44}
+                className="h-8 w-8 object-contain"
+              />
             </div>
             <div>
               <div className="text-lg font-semibold tracking-tight">JellyBean</div>

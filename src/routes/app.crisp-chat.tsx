@@ -82,7 +82,7 @@ type ConversationRecord = {
   last_message_at: string | null;
   last_customer_unread_at: string | null;
   unread_count: number | null;
-  metadata: any;
+  metadata: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -98,7 +98,7 @@ type MessageRecord = {
   content: string;
   message_type: string | null;
   sent_at: string;
-  raw_payload: any;
+  raw_payload: Record<string, unknown> | null;
 };
 
 type WorkspaceRecord = {
@@ -144,7 +144,8 @@ export type CrispAttachment = {
 };
 
 export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | null {
-  const isCustomer = msg.sender_type === "customer" || msg.sender_type === "user" || msg.direction === "incoming";
+  const isCustomer =
+    msg.sender_type === "customer" || msg.sender_type === "user" || msg.direction === "incoming";
   if (!isCustomer) return null;
 
   const raw = msg.raw_payload;
@@ -159,12 +160,19 @@ export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | nul
     name = rawContent.name || rawContent.filename || "";
     type = rawContent.type || "";
     size = typeof rawContent.size === "number" ? rawContent.size : undefined;
-  } else if (typeof rawContent === "string" && (rawContent.startsWith("http://") || rawContent.startsWith("https://"))) {
+  } else if (
+    typeof rawContent === "string" &&
+    (rawContent.startsWith("http://") || rawContent.startsWith("https://"))
+  ) {
     url = rawContent.trim();
   }
 
   // Fallback: check if msg.content itself is an attachment URL
-  if (!url && typeof msg.content === "string" && (msg.content.startsWith("http://") || msg.content.startsWith("https://"))) {
+  if (
+    !url &&
+    typeof msg.content === "string" &&
+    (msg.content.startsWith("http://") || msg.content.startsWith("https://"))
+  ) {
     url = msg.content.trim();
   }
 
@@ -222,7 +230,7 @@ export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | nul
 
 export function getDisplayableCaption(
   content: string | null | undefined,
-  attachment: CrispAttachment | null
+  attachment: CrispAttachment | null,
 ): string | null {
   if (!content) return null;
   const trimmed = content.trim();
@@ -310,15 +318,16 @@ function CrispChatPage() {
     <div className="h-full w-full min-h-0 flex flex-col overflow-hidden bg-background text-foreground">
       <header className="flex h-[76px] shrink-0 items-center border-b border-border bg-card/30 px-4 backdrop-blur-xl md:px-6">
         <div className="min-w-0">
-          <h1 className="font-display text-xl font-bold tracking-[-0.025em] md:text-2xl">Crisp Chat Inbox</h1>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground md:text-sm">Unified multi-workspace customer support portal.</p>
+          <h1 className="font-display text-xl font-bold tracking-[-0.025em] md:text-2xl">
+            Crisp Chat Inbox
+          </h1>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground md:text-sm">
+            Unified multi-workspace customer support portal.
+          </p>
         </div>
       </header>
       <div className="flex-1 min-h-0 overflow-hidden flex flex-col p-3 md:p-4">
-        <RoleGate
-          allow={["admin", "cs_admin", "cs"]}
-          current={auth.primaryRole}
-        >
+        <RoleGate allow={["admin", "cs_admin", "cs"]} current={auth.primaryRole}>
           <CrispInboxInner />
         </RoleGate>
       </div>
@@ -335,13 +344,21 @@ function CrispInboxInner() {
 
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
   const [workspaceSearch, setWorkspaceSearch] = useState<string>("");
-  const [workspaceUnrepliedChatsMap, setWorkspaceUnrepliedChatsMap] = useState<Map<string, number>>(new Map());
-  const [workspaceHasUnreadMap, setWorkspaceHasUnreadMap] = useState<Map<string, boolean>>(new Map());
-  const [workspaceLatestUnreadAtMap, setWorkspaceLatestUnreadAtMap] = useState<Map<string, string>>(new Map());
+  const [workspaceUnrepliedChatsMap, setWorkspaceUnrepliedChatsMap] = useState<Map<string, number>>(
+    new Map(),
+  );
+  const [workspaceHasUnreadMap, setWorkspaceHasUnreadMap] = useState<Map<string, boolean>>(
+    new Map(),
+  );
+  const [workspaceLatestUnreadAtMap, setWorkspaceLatestUnreadAtMap] = useState<Map<string, string>>(
+    new Map(),
+  );
   const [totalUnrepliedCount, setTotalUnrepliedCount] = useState<number>(0);
   const [hasAnyUnread, setHasAnyUnread] = useState<boolean>(false);
   const [todayTotalVisitors, setTodayTotalVisitors] = useState<number>(0);
-  const [todayWorkspaceVisitorsMap, setTodayWorkspaceVisitorsMap] = useState<Map<string, number>>(new Map());
+  const [todayWorkspaceVisitorsMap, setTodayWorkspaceVisitorsMap] = useState<Map<string, number>>(
+    new Map(),
+  );
 
   const [selectedWebsiteId, setSelectedWebsiteId] = useState<string>("all");
   const [conversations, setConversations] = useState<ConversationRecord[]>([]);
@@ -376,7 +393,10 @@ function CrispInboxInner() {
   const [addTokenId, setAddTokenId] = useState("");
   const [addTokenKey, setAddTokenKey] = useState("");
   const [isAddingWorkspace, setIsAddingWorkspace] = useState(false);
-  const [addSuccessResult, setAddSuccessResult] = useState<{ workspaceName: string; webhookUrl: string } | null>(null);
+  const [addSuccessResult, setAddSuccessResult] = useState<{
+    workspaceName: string;
+    webhookUrl: string;
+  } | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
   // View Webhook Modal
@@ -495,7 +515,8 @@ function CrispInboxInner() {
       // Add sessions created today from live webhook events (visitors who visited today without sending text)
       (sessionEventsToday ?? []).forEach((ev) => {
         if (!ev.crisp_website_id) return;
-        const sessId = (ev.payload as any)?.data?.session_id || (ev.payload as any)?.session_id;
+        const payload = ev.payload as { data?: { session_id?: string }; session_id?: string };
+        const sessId = payload?.data?.session_id || payload?.session_id;
         const key = sessId ? `sess_${sessId}` : `evt_${Math.random()}`;
         if (!countedVisitorIds.has(key)) {
           countedVisitorIds.add(key);
@@ -530,7 +551,8 @@ function CrispInboxInner() {
     setIsLoadingConvs(true);
 
     // Use override (initial load) or ref (subsequent calls)
-    const activeWebsiteIds = activeWebsiteIdsOverride ?? workspacesRef.current.map((w) => w.crisp_website_id);
+    const activeWebsiteIds =
+      activeWebsiteIdsOverride ?? workspacesRef.current.map((w) => w.crisp_website_id);
     if (activeWebsiteIds.length === 0) {
       setConversations([]);
       setHasMoreConvs(false);
@@ -582,7 +604,7 @@ function CrispInboxInner() {
       .limit(PAGE_SIZE_MSGS);
 
     if (data) {
-      const sortedAsc = (data as any[]).reverse();
+      const sortedAsc = (data as MessageRecord[]).reverse();
       setMessages(sortedAsc);
       setHasMoreMessages(data.length === PAGE_SIZE_MSGS);
 
@@ -609,7 +631,7 @@ function CrispInboxInner() {
     setIsLoadingOlderMsgs(false);
 
     if (data && data.length > 0) {
-      const olderSorted = (data as any[]).reverse();
+      const olderSorted = (data as MessageRecord[]).reverse();
       const container = messagesContainerRef.current;
       const oldScrollHeight = container?.scrollHeight || 0;
 
@@ -634,7 +656,7 @@ function CrispInboxInner() {
       if (res.ok && res.notes) {
         setNotes(res.notes);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to load notes:", err);
     }
   };
@@ -745,8 +767,10 @@ function CrispInboxInner() {
               updated[idx] = { ...updated[idx], ...changedRow };
               // Re-sort: unread first, then last_message_at DESC (masked messages never unread)
               updated.sort((a, b) => {
-                const ua = ((a.unread_count || 0) > 0 && !isCrispMaskedMessage(a.last_message)) ? 1 : 0;
-                const ub = ((b.unread_count || 0) > 0 && !isCrispMaskedMessage(b.last_message)) ? 1 : 0;
+                const ua =
+                  (a.unread_count || 0) > 0 && !isCrispMaskedMessage(a.last_message) ? 1 : 0;
+                const ub =
+                  (b.unread_count || 0) > 0 && !isCrispMaskedMessage(b.last_message) ? 1 : 0;
                 if (ua !== ub) return ub - ua;
                 return (b.last_message_at || "").localeCompare(a.last_message_at || "");
               });
@@ -762,15 +786,17 @@ function CrispInboxInner() {
               if (!belongsHere) return prev;
               const updated = [changedRow, ...prev];
               updated.sort((a, b) => {
-                const ua = ((a.unread_count || 0) > 0 && !isCrispMaskedMessage(a.last_message)) ? 1 : 0;
-                const ub = ((b.unread_count || 0) > 0 && !isCrispMaskedMessage(b.last_message)) ? 1 : 0;
+                const ua =
+                  (a.unread_count || 0) > 0 && !isCrispMaskedMessage(a.last_message) ? 1 : 0;
+                const ub =
+                  (b.unread_count || 0) > 0 && !isCrispMaskedMessage(b.last_message) ? 1 : 0;
                 if (ua !== ub) return ub - ua;
                 return (b.last_message_at || "").localeCompare(a.last_message_at || "");
               });
               return updated;
             }
           });
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -792,7 +818,7 @@ function CrispInboxInner() {
               setTimeout(() => scrollToBottom("smooth"), 30);
             }
           }
-        }
+        },
       )
       .on(
         "postgres_changes",
@@ -802,15 +828,11 @@ function CrispInboxInner() {
           if (activeId) {
             loadNotes(activeId);
           }
-        }
+        },
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "crisp_workspaces" },
-        () => {
-          loadWorkspaces();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "crisp_workspaces" }, () => {
+        loadWorkspaces();
+      })
       .subscribe();
 
     // ── Background Auto-Sync Heartbeat (Every 30s) ──────────────────────────
@@ -927,7 +949,9 @@ function CrispInboxInner() {
     setMessageInput("");
 
     try {
-      const res = await sendCrispMessage({ data: { conversationId: selectedConversationId, content } });
+      const res = await sendCrispMessage({
+        data: { conversationId: selectedConversationId, content },
+      });
       if (!res.ok) {
         toast.error(res.error || "Could not send message");
         setMessageInput(content);
@@ -949,7 +973,7 @@ function CrispInboxInner() {
           };
           return [...prev, tempMsg];
         });
-        
+
         // Clear needs-reply state locally and reload workspace counts
         setConversations((prev) =>
           prev.map((c) =>
@@ -961,14 +985,14 @@ function CrispInboxInner() {
                   last_message: content,
                   last_message_at: res.sent_at || new Date().toISOString(),
                 }
-              : c
-          )
+              : c,
+          ),
         );
         loadWorkspaceCounts();
         scrollToBottom("smooth");
       }
-    } catch (err: any) {
-      toast.error(err.message || "An unexpected error occurred");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "An unexpected error occurred");
       setMessageInput(content);
     } finally {
       setIsSending(false);
@@ -979,7 +1003,9 @@ function CrispInboxInner() {
     if (!selectedConversationId || isMarkingRead) return;
     setIsMarkingRead(true);
     try {
-      const res = await markCrispConversationRead({ data: { conversationId: selectedConversationId } });
+      const res = await markCrispConversationRead({
+        data: { conversationId: selectedConversationId },
+      });
       if (!res.ok) {
         toast.error(res.error || "Could not mark as read");
       } else {
@@ -991,14 +1017,14 @@ function CrispInboxInner() {
                   unread_count: 0,
                   last_customer_unread_at: null,
                 }
-              : c
-          )
+              : c,
+          ),
         );
         loadWorkspaceCounts();
         toast.success("Chat marked as read");
       }
-    } catch (err: any) {
-      toast.error(err.message || "An unexpected error occurred");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "An unexpected error occurred");
     } finally {
       setIsMarkingRead(false);
     }
@@ -1014,15 +1040,17 @@ function CrispInboxInner() {
     setNoteInput("");
 
     try {
-      const res = await addCrispConversationNote({ data: { conversationId: selectedConversationId, note: noteText } });
+      const res = await addCrispConversationNote({
+        data: { conversationId: selectedConversationId, note: noteText },
+      });
       if (!res.ok) {
         toast.error(res.error || "Could not save internal note");
         setNoteInput(noteText);
       } else {
         loadNotes(selectedConversationId);
       }
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error((err as Error).message);
     } finally {
       setIsAddingNote(false);
     }
@@ -1035,8 +1063,8 @@ function CrispInboxInner() {
       if (res.ok && selectedConversationId) {
         loadNotes(selectedConversationId);
       }
-    } catch (err: any) {
-      toast.error(err.message);
+    } catch (err: unknown) {
+      toast.error((err as Error).message);
     }
   };
 
@@ -1061,7 +1089,9 @@ function CrispInboxInner() {
       if (abortSyncRef.current) return;
 
       if (res.ok) {
-        toast.success(`Synced ${res.synced_conversations} conversations & ${res.synced_messages} messages.`);
+        toast.success(
+          `Synced ${res.synced_conversations} conversations & ${res.synced_messages} messages.`,
+        );
         loadWorkspaces();
         loadWorkspaceCounts();
         loadConversations(selectedWebsiteId, true);
@@ -1088,16 +1118,18 @@ function CrispInboxInner() {
               } else if (indRes.error) {
                 lastError = indRes.error;
               }
-            } catch (wsErr: any) {
+            } catch (wsErr: unknown) {
               if (abortSyncRef.current) break;
-              lastError = wsErr.message || lastError;
+              lastError = (wsErr as Error).message || lastError;
             }
           }
 
           if (abortSyncRef.current) return;
 
           if (successCount > 0) {
-            toast.success(`Synced ${successCount}/${wsList.length} workspaces (${totalConvs} convs, ${totalMsgs} msgs).`);
+            toast.success(
+              `Synced ${successCount}/${wsList.length} workspaces (${totalConvs} convs, ${totalMsgs} msgs).`,
+            );
             loadWorkspaces();
             loadWorkspaceCounts();
             loadConversations("all", true);
@@ -1111,9 +1143,9 @@ function CrispInboxInner() {
           }
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (!abortSyncRef.current) {
-        toast.error(err.message || "History sync failed");
+        toast.error((err as Error).message || "History sync failed");
       }
     } finally {
       setIsSyncing(false);
@@ -1124,7 +1156,8 @@ function CrispInboxInner() {
   // Handle Admin Add Workspace Submit
   const handleAddWorkspaceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!addWebsiteId.trim() || !addTokenId.trim() || !addTokenKey.trim() || isAddingWorkspace) return;
+    if (!addWebsiteId.trim() || !addTokenId.trim() || !addTokenKey.trim() || isAddingWorkspace)
+      return;
 
     setIsAddingWorkspace(true);
     try {
@@ -1149,8 +1182,8 @@ function CrispInboxInner() {
         loadWorkspaces();
         toast.success("Crisp Workspace connected successfully!");
       }
-    } catch (err: any) {
-      toast.error(err.message || "An unexpected error occurred");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "An unexpected error occurred");
     } finally {
       setIsAddingWorkspace(false);
     }
@@ -1169,8 +1202,8 @@ function CrispInboxInner() {
       } else {
         setViewWebhookUrl(res.webhook_url);
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to retrieve Webhook URL");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Failed to retrieve Webhook URL");
     } finally {
       setIsFetchingWebhook(false);
     }
@@ -1182,15 +1215,17 @@ function CrispInboxInner() {
     setIsRegenerating(true);
 
     try {
-      const res = await regenerateCrispWebhookSecret({ data: { websiteId: regenWebhookWs.crisp_website_id } });
+      const res = await regenerateCrispWebhookSecret({
+        data: { websiteId: regenWebhookWs.crisp_website_id },
+      });
       if (!res.ok || !res.webhook_url) {
         toast.error(res.error || "Could not regenerate Webhook Secret");
       } else {
         setRegenResultUrl(res.webhook_url);
         toast.success("Webhook URL regenerated successfully!");
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to regenerate Webhook Secret");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Failed to regenerate Webhook Secret");
     } finally {
       setIsRegenerating(false);
     }
@@ -1206,7 +1241,9 @@ function CrispInboxInner() {
       if (!res.ok) {
         toast.error(res.error || "Could not delete workspace");
       } else {
-        toast.success(`Disconnected workspace "${deleteWs.workspace_name || deleteWs.crisp_website_id}"`);
+        toast.success(
+          `Disconnected workspace "${deleteWs.workspace_name || deleteWs.crisp_website_id}"`,
+        );
 
         if (selectedWebsiteId === deleteWs.crisp_website_id) {
           setSelectedWebsiteId("all");
@@ -1218,8 +1255,8 @@ function CrispInboxInner() {
           loadConversations("all", true);
         });
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to delete workspace");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Failed to delete workspace");
     } finally {
       setIsDeletingWs(false);
     }
@@ -1291,14 +1328,17 @@ function CrispInboxInner() {
                 "w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors text-left",
                 selectedWebsiteId === "all"
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "hover:bg-accent hover:text-accent-foreground text-foreground"
+                  : "hover:bg-accent hover:text-accent-foreground text-foreground",
               )}
             >
               <div className="flex items-center gap-2 truncate">
                 <Globe className="w-4 h-4 shrink-0" />
                 <span className="truncate">All Workspaces</span>
                 {hasAnyUnread && (
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse ml-0.5" title="Has chats needing reply" />
+                  <span
+                    className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse ml-0.5"
+                    title="Has chats needing reply"
+                  />
                 )}
               </div>
               {totalUnrepliedCount > 0 && (
@@ -1320,82 +1360,107 @@ function CrispInboxInner() {
               </div>
             ) : (
               filteredWorkspaces.map((ws) => {
-              const unrepliedCount = workspaceUnrepliedChatsMap.get(ws.crisp_website_id) || 0;
-              const hasUnread = unrepliedCount > 0;
-              const displayName = getWorkspaceDisplayName(ws.crisp_website_id, workspacesMap);
-              const isSelected = selectedWebsiteId === ws.crisp_website_id;
+                const unrepliedCount = workspaceUnrepliedChatsMap.get(ws.crisp_website_id) || 0;
+                const hasUnread = unrepliedCount > 0;
+                const displayName = getWorkspaceDisplayName(ws.crisp_website_id, workspacesMap);
+                const isSelected = selectedWebsiteId === ws.crisp_website_id;
 
-              return (
-                <div
-                  key={ws.crisp_website_id}
-                  className={cn(
-                    "w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm transition-colors group",
-                    isSelected
-                      ? "bg-primary text-primary-foreground font-medium shadow-sm"
-                      : "hover:bg-accent hover:text-accent-foreground text-muted-foreground"
-                  )}
-                >
-                  <button
-                    onClick={() => setSelectedWebsiteId(ws.crisp_website_id)}
-                    className="flex-1 flex items-center gap-2 min-w-0 text-left py-0.5"
+                return (
+                  <div
+                    key={ws.crisp_website_id}
+                    className={cn(
+                      "w-full flex items-center justify-between px-2.5 py-1.5 rounded-md text-sm transition-colors group",
+                      isSelected
+                        ? "bg-primary text-primary-foreground font-medium shadow-sm"
+                        : "hover:bg-accent hover:text-accent-foreground text-muted-foreground",
+                    )}
                   >
-                    <span className={cn("w-2 h-2 rounded-full shrink-0", ws.enabled ? "bg-emerald-500/60" : "bg-muted")} />
-                    <span className="truncate">{displayName}</span>
-                    {hasUnread && (
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse ml-0.5" title="Has chats needing reply" />
-                    )}
-                  </button>
+                    <button
+                      onClick={() => setSelectedWebsiteId(ws.crisp_website_id)}
+                      className="flex-1 flex items-center gap-2 min-w-0 text-left py-0.5"
+                    >
+                      <span
+                        className={cn(
+                          "w-2 h-2 rounded-full shrink-0",
+                          ws.enabled ? "bg-emerald-500/60" : "bg-muted",
+                        )}
+                      />
+                      <span className="truncate">{displayName}</span>
+                      {hasUnread && (
+                        <span
+                          className="w-2 h-2 rounded-full bg-emerald-500 shrink-0 animate-pulse ml-0.5"
+                          title="Has chats needing reply"
+                        />
+                      )}
+                    </button>
 
-                  <div className="flex items-center gap-1 shrink-0 ml-1">
-                    {unrepliedCount > 0 && (
-                      <Badge
-                        variant={isSelected ? "secondary" : "outline"}
-                        className="text-xs px-1.5 py-0 font-semibold border-border/60"
-                      >
-                        {unrepliedCount}
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-1 shrink-0 ml-1">
+                      {unrepliedCount > 0 && (
+                        <Badge
+                          variant={isSelected ? "secondary" : "outline"}
+                          className="text-xs px-1.5 py-0 font-semibold border-border/60"
+                        >
+                          {unrepliedCount}
+                        </Badge>
+                      )}
 
-                    {isAdmin && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              "h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-md",
-                              isSelected ? "hover:bg-primary-foreground/20 text-primary-foreground" : "hover:bg-accent text-muted-foreground"
-                            )}
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48 text-xs">
-                          <DropdownMenuItem onClick={() => handleOpenViewWebhook(ws)} className="cursor-pointer">
-                            <Copy className="w-3.5 h-3.5 mr-2 text-primary" />
-                            <span>View Webhook URL</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleCopyWebhookUrlFromWs(ws)} className="cursor-pointer">
-                            <Check className="w-3.5 h-3.5 mr-2 text-emerald-500" />
-                            <span>Copy Webhook URL</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => { setRegenWebhookWs(ws); setRegenResultUrl(null); }} className="cursor-pointer">
-                            <RefreshCw className="w-3.5 h-3.5 mr-2 text-amber-500" />
-                            <span>Regenerate Webhook URL</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setDeleteWs(ws)} className="cursor-pointer text-destructive focus:text-destructive">
-                            <Trash2 className="w-3.5 h-3.5 mr-2" />
-                            <span>Delete Workspace</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                      {isAdmin && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={cn(
+                                "h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-md",
+                                isSelected
+                                  ? "hover:bg-primary-foreground/20 text-primary-foreground"
+                                  : "hover:bg-accent text-muted-foreground",
+                              )}
+                            >
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 text-xs">
+                            <DropdownMenuItem
+                              onClick={() => handleOpenViewWebhook(ws)}
+                              className="cursor-pointer"
+                            >
+                              <Copy className="w-3.5 h-3.5 mr-2 text-primary" />
+                              <span>View Webhook URL</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleCopyWebhookUrlFromWs(ws)}
+                              className="cursor-pointer"
+                            >
+                              <Check className="w-3.5 h-3.5 mr-2 text-emerald-500" />
+                              <span>Copy Webhook URL</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setRegenWebhookWs(ws);
+                                setRegenResultUrl(null);
+                              }}
+                              className="cursor-pointer"
+                            >
+                              <RefreshCw className="w-3.5 h-3.5 mr-2 text-amber-500" />
+                              <span>Regenerate Webhook URL</span>
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setDeleteWs(ws)}
+                              className="cursor-pointer text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="w-3.5 h-3.5 mr-2" />
+                              <span>Delete Workspace</span>
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
           </div>
         </div>
       </div>
@@ -1422,10 +1487,18 @@ function CrispInboxInner() {
               onClick={isSyncing ? handleStopSync : handleSyncHistory}
               onMouseEnter={() => isSyncing && setIsHoveringSync(true)}
               onMouseLeave={() => setIsHoveringSync(false)}
-              title={isSyncing ? (isHoveringSync ? "Stop syncing" : "Syncing in progress... (click to stop)") : "Sync Crisp History"}
+              title={
+                isSyncing
+                  ? isHoveringSync
+                    ? "Stop syncing"
+                    : "Syncing in progress... (click to stop)"
+                  : "Sync Crisp History"
+              }
               className={cn(
                 "h-9 w-9 shrink-0 transition-colors duration-150",
-                isSyncing && isHoveringSync && "bg-destructive/15 text-destructive border-destructive/40 hover:bg-destructive/25"
+                isSyncing &&
+                  isHoveringSync &&
+                  "bg-destructive/15 text-destructive border-destructive/40 hover:bg-destructive/25",
               )}
             >
               {isSyncing ? (
@@ -1455,13 +1528,19 @@ function CrispInboxInner() {
               </Badge>
             </div>
             <span className="text-[10px] text-muted-foreground truncate max-w-[110px]">
-              {selectedWebsiteId === "all" ? "All Workspaces" : getWorkspaceDisplayName(selectedWebsiteId, workspacesMap)}
+              {selectedWebsiteId === "all"
+                ? "All Workspaces"
+                : getWorkspaceDisplayName(selectedWebsiteId, workspacesMap)}
             </span>
           </div>
         </div>
 
         {/* Conversations Scroll Area with Infinite Scroll */}
-        <div ref={convScrollRef} onScroll={handleConvScroll} className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 overscroll-contain">
+        <div
+          ref={convScrollRef}
+          onScroll={handleConvScroll}
+          className="flex-1 min-h-0 overflow-y-auto p-2 space-y-1 overscroll-contain"
+        >
           {filteredConversations.length === 0 ? (
             <div className="p-6 text-center text-muted-foreground text-xs">
               {isLoadingConvs ? "Loading conversations..." : "No conversations found."}
@@ -1482,16 +1561,24 @@ function CrispInboxInner() {
                       isSelected
                         ? "bg-accent/80 border-primary/50 shadow-sm"
                         : isUnread
-                        ? "bg-primary/10 border-primary/30 shadow-xs hover:bg-accent/40"
-                        : "border-border/20 hover:bg-accent/40"
+                          ? "bg-primary/10 border-primary/30 shadow-xs hover:bg-accent/40"
+                          : "border-border/20 hover:bg-accent/40",
                     )}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         {isUnread && (
-                          <span className="w-2.5 h-2.5 rounded-full bg-primary shrink-0 animate-pulse" title="Needs operator reply" />
+                          <span
+                            className="w-2.5 h-2.5 rounded-full bg-primary shrink-0 animate-pulse"
+                            title="Needs operator reply"
+                          />
                         )}
-                        <span className={cn("text-sm truncate text-foreground", isUnread ? "font-bold" : "font-medium")}>
+                        <span
+                          className={cn(
+                            "text-sm truncate text-foreground",
+                            isUnread ? "font-bold" : "font-medium",
+                          )}
+                        >
                           {conv.customer_name || "Visitor"}
                         </span>
                       </div>
@@ -1500,9 +1587,16 @@ function CrispInboxInner() {
                       </span>
                     </div>
 
-                    <p className={cn("text-xs line-clamp-2 break-words leading-relaxed", isUnread ? "text-foreground font-medium" : "text-muted-foreground")}>
+                    <p
+                      className={cn(
+                        "text-xs line-clamp-2 break-words leading-relaxed",
+                        isUnread ? "text-foreground font-medium" : "text-muted-foreground",
+                      )}
+                    >
                       {isMaskedPreview ? (
-                        <span className="italic opacity-75">Message unavailable (Crisp free plan)</span>
+                        <span className="italic opacity-75">
+                          Message unavailable (Crisp free plan)
+                        </span>
                       ) : (
                         conv.last_message || "No messages yet"
                       )}
@@ -1559,7 +1653,11 @@ function CrispInboxInner() {
                     disabled={isMarkingRead}
                     title="Mark conversation as read without sending a reply"
                   >
-                    {isMarkingRead ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />}
+                    {isMarkingRead ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                    )}
                     <span>Mark as Read</span>
                   </Button>
                 ) : null}
@@ -1570,13 +1668,20 @@ function CrispInboxInner() {
                   onClick={() => setShowRightPanel((prev) => !prev)}
                   title={showRightPanel ? "Hide Details Panel" : "Show Details Panel"}
                 >
-                  {showRightPanel ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+                  {showRightPanel ? (
+                    <PanelRightClose className="w-4 h-4" />
+                  ) : (
+                    <PanelRightOpen className="w-4 h-4" />
+                  )}
                 </Button>
               </div>
             </div>
 
             {/* Messages Scroll Area with Pagination */}
-            <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto p-4 overscroll-contain">
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 min-h-0 overflow-y-auto p-4 overscroll-contain"
+            >
               <div className="space-y-3 max-w-3xl mx-auto">
                 {/* Load Older Messages Button */}
                 {hasMoreMessages && (
@@ -1609,7 +1714,7 @@ function CrispInboxInner() {
                       key={msg.id}
                       className={cn(
                         "flex flex-col max-w-[75%]",
-                        isOperator ? "ml-auto items-end" : "mr-auto items-start"
+                        isOperator ? "ml-auto items-end" : "mr-auto items-start",
                       )}
                     >
                       <div
@@ -1618,15 +1723,16 @@ function CrispInboxInner() {
                           isMasked
                             ? "bg-muted/80 border border-border text-foreground rounded-2xl"
                             : isOperator
-                            ? "bg-primary text-primary-foreground rounded-br-xs"
-                            : "bg-muted text-foreground rounded-bl-xs"
+                              ? "bg-primary text-primary-foreground rounded-br-xs"
+                              : "bg-muted text-foreground rounded-bl-xs",
                         )}
                       >
                         {isMasked ? (
                           <div className="flex items-start gap-2 py-0.5 text-foreground">
                             <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-muted-foreground" />
                             <p className="italic text-xs leading-relaxed text-foreground">
-                              Message unavailable — older message history is hidden by the current Crisp plan.
+                              Message unavailable — older message history is hidden by the current
+                              Crisp plan.
                             </p>
                           </div>
                         ) : attachment?.isImage ? (
@@ -1646,7 +1752,9 @@ function CrispInboxInner() {
                               />
                             </a>
                             {caption && (
-                              <p className="whitespace-pre-wrap leading-relaxed px-0.5">{caption}</p>
+                              <p className="whitespace-pre-wrap leading-relaxed px-0.5">
+                                {caption}
+                              </p>
                             )}
                           </div>
                         ) : attachment?.isAudio ? (
@@ -1655,7 +1763,11 @@ function CrispInboxInner() {
                               <Volume2 className="w-3.5 h-3.5 text-primary shrink-0" />
                               <span>{attachment.name}</span>
                             </div>
-                            <audio controls className="w-full max-w-[280px] h-8 rounded mt-1" src={attachment.url}>
+                            <audio
+                              controls
+                              className="w-full max-w-[280px] h-8 rounded mt-1"
+                              src={attachment.url}
+                            >
                               Your browser does not support the audio element.
                             </audio>
                             {caption && (
@@ -1679,7 +1791,9 @@ function CrispInboxInner() {
                                   {attachment.name || "Download Attachment"}
                                 </p>
                                 <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
-                                  {attachment.size ? <span>{formatFileSize(attachment.size)}</span> : null}
+                                  {attachment.size ? (
+                                    <span>{formatFileSize(attachment.size)}</span>
+                                  ) : null}
                                   <span className="flex items-center gap-1 text-primary group-hover:underline font-medium">
                                     <Download className="w-3 h-3" /> Download
                                   </span>
@@ -1704,7 +1818,10 @@ function CrispInboxInner() {
             </div>
 
             {/* Message Composer - Anchored to Bottom */}
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-border/40 flex items-center gap-2 bg-card/20 shrink-0 mt-auto">
+            <form
+              onSubmit={handleSendMessage}
+              className="p-3 border-t border-border/40 flex items-center gap-2 bg-card/20 shrink-0 mt-auto"
+            >
               <Textarea
                 placeholder="Type a message to send to Crisp visitor..."
                 value={messageInput}
@@ -1737,7 +1854,9 @@ function CrispInboxInner() {
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-muted-foreground text-center">
             <MessageSquare className="w-10 h-10 mb-2 stroke-1 opacity-50" />
             <p className="text-sm font-medium">No conversation selected</p>
-            <p className="text-xs text-muted-foreground">Select a chat from Column 2 to inspect and reply.</p>
+            <p className="text-xs text-muted-foreground">
+              Select a chat from Column 2 to inspect and reply.
+            </p>
           </div>
         )}
       </div>
@@ -1773,23 +1892,36 @@ function CrispInboxInner() {
 
                   <div className="space-y-2 text-xs">
                     <div>
-                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Workspace</span>
+                      <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
+                        Workspace
+                      </span>
                       <span className="font-medium text-foreground">
-                        {getWorkspaceDisplayName(activeConversation.crisp_website_id, workspacesMap)}
+                        {getWorkspaceDisplayName(
+                          activeConversation.crisp_website_id,
+                          workspacesMap,
+                        )}
                       </span>
                     </div>
 
                     {activeConversation.customer_email && (
                       <div>
-                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Email</span>
-                        <span className="font-medium text-foreground break-all">{activeConversation.customer_email}</span>
+                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
+                          Email
+                        </span>
+                        <span className="font-medium text-foreground break-all">
+                          {activeConversation.customer_email}
+                        </span>
                       </div>
                     )}
 
                     {activeConversation.customer_phone && (
                       <div>
-                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">Phone</span>
-                        <span className="font-medium text-foreground">{activeConversation.customer_phone}</span>
+                        <span className="text-muted-foreground block text-[10px] uppercase font-semibold">
+                          Phone
+                        </span>
+                        <span className="font-medium text-foreground">
+                          {activeConversation.customer_phone}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -1798,8 +1930,13 @@ function CrispInboxInner() {
                 {/* Internal Notes Section */}
                 <div className="border-t border-border/40 pt-4 space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">Internal Notes</span>
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-500/40 text-amber-400">
+                    <span className="font-semibold text-xs uppercase tracking-wider text-muted-foreground">
+                      Internal Notes
+                    </span>
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0 border-amber-500/40 text-amber-400"
+                    >
                       JellyBean Only
                     </Badge>
                   </div>
@@ -1821,7 +1958,11 @@ function CrispInboxInner() {
                       disabled={isAddingNote || !noteInput.trim()}
                       className="w-full h-8 text-xs gap-1"
                     >
-                      {isAddingNote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                      {isAddingNote ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="w-3.5 h-3.5" />
+                      )}
                       <span>Add Note</span>
                     </Button>
                   </form>
@@ -1834,13 +1975,21 @@ function CrispInboxInner() {
                       </p>
                     ) : (
                       notes.map((note) => (
-                        <div key={note.id} className="p-2.5 rounded bg-muted/40 border border-border/40 space-y-1 relative group">
+                        <div
+                          key={note.id}
+                          className="p-2.5 rounded bg-muted/40 border border-border/40 space-y-1 relative group"
+                        >
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-[11px] text-primary">
                               {note.author_name || "Team Member"}
                             </span>
                             <span className="text-[10px] text-muted-foreground">
-                              {new Date(note.created_at).toLocaleDateString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              {new Date(note.created_at).toLocaleDateString([], {
+                                month: "short",
+                                day: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
                             </span>
                           </div>
                           <p className="text-xs whitespace-pre-wrap break-words">{note.note}</p>
@@ -1880,7 +2029,11 @@ function CrispInboxInner() {
                 <span>Connect Crisp Workspace</span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Generate a Website Token in Crisp under <strong>Settings → Workspace Settings → Advanced configuration → REST API / API Token</strong>.
+                Generate a Website Token in Crisp under{" "}
+                <strong>
+                  Settings → Workspace Settings → Advanced configuration → REST API / API Token
+                </strong>
+                .
               </DialogDescription>
             </DialogHeader>
 
@@ -1985,11 +2138,16 @@ function CrispInboxInner() {
                       className="shrink-0 h-9 w-9"
                       onClick={() => handleCopyText(addSuccessResult.webhookUrl)}
                     >
-                      {copiedUrl ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                      {copiedUrl ? (
+                        <Check className="w-4 h-4 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Add this URL as a Website Hook in Crisp under <strong>Settings → Advanced configuration → Webhooks</strong>.
+                    Add this URL as a Website Hook in Crisp under{" "}
+                    <strong>Settings → Advanced configuration → Webhooks</strong>.
                   </p>
                 </div>
 
@@ -2015,7 +2173,10 @@ function CrispInboxInner() {
       {/* ADMIN VIEW WEBHOOK URL MODAL */}
       {/* ========================================================================= */}
       {isAdmin && viewWebhookWs && (
-        <Dialog open={Boolean(viewWebhookWs)} onOpenChange={(open) => !open && setViewWebhookWs(null)}>
+        <Dialog
+          open={Boolean(viewWebhookWs)}
+          onOpenChange={(open) => !open && setViewWebhookWs(null)}
+        >
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base font-semibold">
@@ -2023,7 +2184,11 @@ function CrispInboxInner() {
                 <span>Webhook URL</span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Current Webhook URL for <strong>{getWorkspaceDisplayName(viewWebhookWs.crisp_website_id, workspacesMap)}</strong>.
+                Current Webhook URL for{" "}
+                <strong>
+                  {getWorkspaceDisplayName(viewWebhookWs.crisp_website_id, workspacesMap)}
+                </strong>
+                .
               </DialogDescription>
             </DialogHeader>
 
@@ -2031,7 +2196,9 @@ function CrispInboxInner() {
               {isFetchingWebhook ? (
                 <div className="flex items-center justify-center p-6">
                   <Loader2 className="w-5 h-5 animate-spin text-primary mr-2" />
-                  <span className="text-xs text-muted-foreground">Retrieving Webhook Secret from Vault...</span>
+                  <span className="text-xs text-muted-foreground">
+                    Retrieving Webhook Secret from Vault...
+                  </span>
                 </div>
               ) : viewWebhookUrl ? (
                 <div className="space-y-2">
@@ -2049,11 +2216,16 @@ function CrispInboxInner() {
                       className="shrink-0 h-9 w-9"
                       onClick={() => handleCopyText(viewWebhookUrl)}
                     >
-                      {copiedUrl ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                      {copiedUrl ? (
+                        <Check className="w-4 h-4 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    This is the existing Webhook URL for this workspace. Paste it into Crisp under <strong>Settings → Advanced configuration → Webhooks</strong>.
+                    This is the existing Webhook URL for this workspace. Paste it into Crisp under{" "}
+                    <strong>Settings → Advanced configuration → Webhooks</strong>.
                   </p>
                 </div>
               ) : (
@@ -2074,7 +2246,10 @@ function CrispInboxInner() {
       {/* ADMIN REGENERATE WEBHOOK DIALOG */}
       {/* ========================================================================= */}
       {isAdmin && regenWebhookWs && (
-        <Dialog open={Boolean(regenWebhookWs)} onOpenChange={(open) => !open && setRegenWebhookWs(null)}>
+        <Dialog
+          open={Boolean(regenWebhookWs)}
+          onOpenChange={(open) => !open && setRegenWebhookWs(null)}
+        >
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-base font-semibold text-amber-500">
@@ -2082,7 +2257,8 @@ function CrispInboxInner() {
                 <span>Regenerate Webhook URL?</span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
-                Regenerating the webhook URL will invalidate the previous URL. You will need to replace the URL inside Crisp immediately.
+                Regenerating the webhook URL will invalidate the previous URL. You will need to
+                replace the URL inside Crisp immediately.
               </DialogDescription>
             </DialogHeader>
 
@@ -2106,7 +2282,9 @@ function CrispInboxInner() {
                     onClick={handleConfirmRegenerateWebhook}
                     disabled={isRegenerating}
                   >
-                    {isRegenerating ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : null}
+                    {isRegenerating ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
+                    ) : null}
                     <span>Regenerate Webhook URL</span>
                   </Button>
                 </div>
@@ -2116,7 +2294,11 @@ function CrispInboxInner() {
                     New Webhook URL Generated. Replace it inside Crisp immediately.
                   </div>
                   <div className="flex items-center gap-2">
-                    <Input readOnly value={regenResultUrl} className="text-xs font-mono bg-muted/50 select-all" />
+                    <Input
+                      readOnly
+                      value={regenResultUrl}
+                      className="text-xs font-mono bg-muted/50 select-all"
+                    />
                     <Button
                       type="button"
                       variant="outline"
@@ -2124,7 +2306,11 @@ function CrispInboxInner() {
                       className="shrink-0 h-9 w-9"
                       onClick={() => handleCopyText(regenResultUrl)}
                     >
-                      {copiedUrl ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+                      {copiedUrl ? (
+                        <Check className="w-4 h-4 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-4 h-4" />
+                      )}
                     </Button>
                   </div>
                   <div className="flex justify-end pt-2 border-t border-border/40">
@@ -2151,8 +2337,12 @@ function CrispInboxInner() {
                 <span>Delete Crisp Workspace?</span>
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground leading-relaxed">
-                This will disconnect <strong>"{getWorkspaceDisplayName(deleteWs.crisp_website_id, workspacesMap)}"</strong> from JellyBean.
-                The Crisp credentials and webhook configuration stored for this workspace will no longer be used.
+                This will disconnect{" "}
+                <strong>
+                  "{getWorkspaceDisplayName(deleteWs.crisp_website_id, workspacesMap)}"
+                </strong>{" "}
+                from JellyBean. The Crisp credentials and webhook configuration stored for this
+                workspace will no longer be used.
               </DialogDescription>
             </DialogHeader>
 
@@ -2192,8 +2382,8 @@ function CrispInboxInner() {
       } else {
         handleCopyText(res.webhook_url);
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to fetch Webhook URL");
+    } catch (err: unknown) {
+      toast.error((err as Error).message || "Failed to fetch Webhook URL");
     }
   }
 }

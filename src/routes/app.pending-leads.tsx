@@ -3,7 +3,16 @@ import { useEffect } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
-import { Bell, BellRing, Check, ExternalLink, Loader2, MapPin, Phone, RefreshCw } from "lucide-react";
+import {
+  Bell,
+  BellRing,
+  Check,
+  ExternalLink,
+  Loader2,
+  MapPin,
+  Phone,
+  RefreshCw,
+} from "lucide-react";
 
 import { RouteSkeleton } from "@/components/route-skeleton";
 import { PageHeader, PageBody, RoleGate } from "@/components/page";
@@ -76,14 +85,10 @@ function Inner() {
   useEffect(() => {
     const channel = supabase
       .channel(`pending-leads-page-${crypto.randomUUID()}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "lead_reminders" },
-        () => {
-          void qc.invalidateQueries({ queryKey: ["pending-reminder-leads"] });
-          void qc.invalidateQueries({ queryKey: ["pending-reminders-count"] });
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_reminders" }, () => {
+        void qc.invalidateQueries({ queryKey: ["pending-reminder-leads"] });
+        void qc.invalidateQueries({ queryKey: ["pending-reminders-count"] });
+      })
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
@@ -195,7 +200,8 @@ function Inner() {
                       <span
                         className={cn(
                           "text-[10.5px] px-2.5 py-1 rounded-full border font-medium shadow-sm",
-                          STATUS_TONE[r.cs_status] ?? "bg-muted text-muted-foreground border-border",
+                          STATUS_TONE[r.cs_status] ??
+                            "bg-muted text-muted-foreground border-border",
                         )}
                       >
                         {STATUS_LABEL[r.cs_status] ?? r.cs_status.replace(/_/g, " ")}

@@ -1232,9 +1232,12 @@ function Inner() {
       // The DB function claims rows atomically with FOR UPDATE SKIP LOCKED, so
       // several users pressing this at once never grab the same leads and none
       // of the calls fail — each just takes the next available unclaimed rows.
-      const { data, error } = await supabase.rpc("assign_raw_leads_to_me" as never, {
-        p_limit: assignCount,
-      } as never);
+      const { data, error } = await supabase.rpc(
+        "assign_raw_leads_to_me" as never,
+        {
+          p_limit: assignCount,
+        } as never,
+      );
       if (error) {
         toast.error(friendlyError(error));
         return;
@@ -1718,7 +1721,7 @@ function Inner() {
                     ? `Auto-checking ${uncheckedCount} leads…`
                     : `Check ${aiTargets.length || 50} Lead${aiTargets.length === 1 ? "" : "s"}`}
               </Button>
-               <p className="px-1 text-[11px] leading-snug text-muted-foreground lg:w-[210px]">
+              <p className="px-1 text-[11px] leading-snug text-muted-foreground lg:w-[210px]">
                 {autoActive ? "Locked until under 50 left." : "Auto-runs at 50+ unchecked."}
               </p>
             </div>
