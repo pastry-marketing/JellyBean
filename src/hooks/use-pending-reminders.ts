@@ -39,13 +39,9 @@ export function usePendingReminders(enabled: boolean) {
 
     const channel = supabase
       .channel("pending-reminders-nav-sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "lead_reminders" },
-        () => {
-          void fetchCount();
-        },
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "lead_reminders" }, () => {
+        void fetchCount();
+      })
       .subscribe();
 
     const pollInterval = setInterval(() => {

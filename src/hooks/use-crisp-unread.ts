@@ -39,15 +39,11 @@ export function useCrispUnread(enabled: boolean = true) {
         { event: "*", schema: "public", table: "crisp_conversations" },
         () => {
           void fetchUnreadCount();
-        }
+        },
       )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "crisp_workspaces" },
-        () => {
-          void fetchUnreadCount();
-        }
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "crisp_workspaces" }, () => {
+        void fetchUnreadCount();
+      })
       .subscribe();
 
     // Background heartbeat poll every 30s to keep unread badges synced even if websocket drops

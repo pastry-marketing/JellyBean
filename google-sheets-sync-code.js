@@ -5,7 +5,7 @@
  * Release: v2.6 (Strict "New to Contact" Pipeline Engine)
  * Updated: 2026-09-07
  * =========================================================================
- * 
+ *
  * EXACT COLUMNS STRUCTURE (13 Columns):
  * 1.  Lead Created Date & Time (Column A - VERY FIRST)
  * 2.  Customer Name            (Column B)
@@ -20,11 +20,11 @@
  * 11. Assigned To              (Column K - THIRD LAST COLUMN)
  * 12. Important                (Column L - SECOND LAST COLUMN)
  * 13. Lead ID                  (Column M - LAST COLUMN / Tracking UUID)
- * 
+ *
  * TABS / SHEETS:
  * 1. "New to Contact"   -> All leads with status "New to contact" WITHOUT Pinned Important
  * 2. "Pinned Important" -> All leads with status "New to contact" WITH Pinned Important
- * 
+ *
  * SYNC BEHAVIOR:
  * - ONLY "New to contact" leads belong on these Google Sheets.
  * - ADD (INSERT): If status is "New to contact", added to Row 2 of the appropriate tab.
@@ -39,29 +39,30 @@
 const CONFIG = {
   SHEET_NEW_TO_CONTACT: "New to Contact",
   SHEET_PINNED_IMPORTANT: "Pinned Important",
-  
+
   HEADERS: [
-    "Lead Created Date & Time",  // 1  (Column A)
-    "Customer Name",             // 2  (Column B)
-    "Customer Phone No",         // 3  (Column C)
-    "Area",                      // 4  (Column D)
-    "Service",                   // 5  (Column E)
-    "Status",                    // 6  (Column F)
-    "Number Name",               // 7  (Column G)
-    "Context",                   // 8  (Column H)
-    "Exact Customer Requirement",// 9  (Column I)
-    "Compose",                   // 10 (Column J)
-    "Assigned To",               // 11 (Column K)
-    "Important",                 // 12 (Column L)
-    "Lead ID"                    // 13 (Column M)
-  ]
+    "Lead Created Date & Time", // 1  (Column A)
+    "Customer Name", // 2  (Column B)
+    "Customer Phone No", // 3  (Column C)
+    "Area", // 4  (Column D)
+    "Service", // 5  (Column E)
+    "Status", // 6  (Column F)
+    "Number Name", // 7  (Column G)
+    "Context", // 8  (Column H)
+    "Exact Customer Requirement", // 9  (Column I)
+    "Compose", // 10 (Column J)
+    "Assigned To", // 11 (Column K)
+    "Important", // 12 (Column L)
+    "Lead ID", // 13 (Column M)
+  ],
 };
 
 /**
  * Creates custom CRM menu in Google Sheets
  */
 function onOpen() {
-  SpreadsheetApp.getUi().createMenu("⚡ Jellybean CRM")
+  SpreadsheetApp.getUi()
+    .createMenu("⚡ Jellybean CRM")
     .addItem("Format & Setup Sheets", "setupSheets")
     .addItem("Check Webhook Status", "checkWebhookStatus")
     .addItem("Clean Blank Rows", "cleanBlankRows")
@@ -89,10 +90,10 @@ function setupSheets() {
     if (!sheet) {
       sheet = ss.insertSheet(name, idx);
     }
-    
+
     // Set headers
     sheet.getRange(1, 1, 1, CONFIG.HEADERS.length).setValues([CONFIG.HEADERS]);
-    
+
     // Style headers
     const headerRange = sheet.getRange(1, 1, 1, CONFIG.HEADERS.length);
     headerRange.setFontWeight("bold");
@@ -102,7 +103,7 @@ function setupSheets() {
     headerRange.setVerticalAlignment("middle");
     sheet.setRowHeight(1, 38);
     sheet.setFrozenRows(1);
-    
+
     // Column widths tailored for readable CRM content
     sheet.setColumnWidth(1, 180); // Lead Created Date & Time (Column A)
     sheet.setColumnWidth(2, 180); // Customer Name
@@ -122,10 +123,15 @@ function setupSheets() {
   // Remove default blank "Sheet1" if target sheets exist
   const defaultSheet = ss.getSheetByName("Sheet1");
   if (defaultSheet && ss.getSheets().length > 1) {
-    try { ss.deleteSheet(defaultSheet); } catch (e) {}
+    try {
+      ss.deleteSheet(defaultSheet);
+    } catch (e) {}
   }
 
-  SpreadsheetApp.getActiveSpreadsheet().toast("Sheets formatted! 13 columns configured successfully.", "Jellybean CRM");
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    "Sheets formatted! 13 columns configured successfully.",
+    "Jellybean CRM",
+  );
 }
 
 /**
@@ -133,9 +139,12 @@ function setupSheets() {
  */
 function cleanBlankRows() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheets = [ss.getSheetByName(CONFIG.SHEET_NEW_TO_CONTACT), ss.getSheetByName(CONFIG.SHEET_PINNED_IMPORTANT)];
-  
-  sheets.forEach(sheet => {
+  const sheets = [
+    ss.getSheetByName(CONFIG.SHEET_NEW_TO_CONTACT),
+    ss.getSheetByName(CONFIG.SHEET_PINNED_IMPORTANT),
+  ];
+
+  sheets.forEach((sheet) => {
     if (!sheet) return;
     const maxRows = sheet.getMaxRows();
     const lastRow = sheet.getLastRow();
@@ -185,16 +194,20 @@ function leadToRow(lead) {
     try {
       const d = new Date(createdDate);
       if (!isNaN(d.getTime())) {
-        createdDate = Utilities.formatDate(d, Session.getScriptTimeZone() || "GMT+5", "yyyy-MM-dd HH:mm:ss");
+        createdDate = Utilities.formatDate(
+          d,
+          Session.getScriptTimeZone() || "GMT+5",
+          "yyyy-MM-dd HH:mm:ss",
+        );
       }
     } catch (e) {}
   }
 
   // 3. Customer Phone No (Combine main + secondary if available)
-  const phone = lead.customer_number_2 
-    ? `${lead.customer_number || ''}, ${lead.customer_number_2}` 
-    : (lead.customer_number || '');
-    
+  const phone = lead.customer_number_2
+    ? `${lead.customer_number || ""}, ${lead.customer_number_2}`
+    : lead.customer_number || "";
+
   // 4. Area
   const area = lead.main_area || lead.sub_area || lead.area || "";
 
@@ -202,13 +215,21 @@ function leadToRow(lead) {
   const status = formatStatus(lead.cs_status);
 
   // 9. Exact Customer Requirement
-  const exactRequirement = lead.requirement_1 || lead.requirement_2 || lead.post_text || lead.exact_requirement || lead.context || "";
-  
+  const exactRequirement =
+    lead.requirement_1 ||
+    lead.requirement_2 ||
+    lead.post_text ||
+    lead.exact_requirement ||
+    lead.context ||
+    "";
+
   // 10. Compose
   const compose = lead.marketing_notes || lead.compose || "";
 
   // 11. Assigned To (Third Last Column - Resolved Staff Name)
-  const assignedName = lead.assigned_to_name || (lead.assigned_to && !lead.assigned_to.includes("-") ? lead.assigned_to : "Unassigned");
+  const assignedName =
+    lead.assigned_to_name ||
+    (lead.assigned_to && !lead.assigned_to.includes("-") ? lead.assigned_to : "Unassigned");
 
   // 12. Important (Second Last Column)
   let importantStatus = "No";
@@ -219,19 +240,19 @@ function leadToRow(lead) {
   }
 
   return [
-    createdDate,                  // 1. Lead Created Date & Time (Column A)
-    lead.customer_name || "",     // 2. Customer Name
-    phone,                        // 3. Customer Phone No
-    area,                         // 4. Area
+    createdDate, // 1. Lead Created Date & Time (Column A)
+    lead.customer_name || "", // 2. Customer Name
+    phone, // 3. Customer Phone No
+    area, // 4. Area
     lead.service || lead.pass_it_to || "", // 5. Service
-    status,                       // 6. Status
-    lead.number_name || "",       // 7. Number Name
-    lead.context || "",           // 8. Context
-    exactRequirement,             // 9. Exact Customer Requirement
-    compose,                      // 10. Compose
-    assignedName,                 // 11. Assigned To (THIRD LAST COLUMN)
-    importantStatus,              // 12. Important (SECOND LAST COLUMN)
-    lead.id || ""                 // 13. Lead ID (LAST COLUMN)
+    status, // 6. Status
+    lead.number_name || "", // 7. Number Name
+    lead.context || "", // 8. Context
+    exactRequirement, // 9. Exact Customer Requirement
+    compose, // 10. Compose
+    assignedName, // 11. Assigned To (THIRD LAST COLUMN)
+    importantStatus, // 12. Important (SECOND LAST COLUMN)
+    lead.id || "", // 13. Lead ID (LAST COLUMN)
   ];
 }
 
@@ -242,19 +263,25 @@ function extractDigitsList(phoneStr) {
   if (!phoneStr) return [];
   return String(phoneStr)
     .split(/[,/|]/)
-    .map(function(p) { return p.replace(/\D/g, ""); })
-    .filter(function(p) { return p.length >= 7; });
+    .map(function (p) {
+      return p.replace(/\D/g, "");
+    })
+    .filter(function (p) {
+      return p.length >= 7;
+    });
 }
 
 /**
  * Handles GET requests (for browser/curl testing)
  */
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "active",
-    message: "Jellybean CRM Google Sheets Sync Engine is live!",
-    time: new Date().toISOString()
-  })).setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(
+    JSON.stringify({
+      status: "active",
+      message: "Jellybean CRM Google Sheets Sync Engine is live!",
+      time: new Date().toISOString(),
+    }),
+  ).setMimeType(ContentService.MimeType.JSON);
 }
 
 /**
@@ -267,7 +294,10 @@ function doPost(e) {
   try {
     lock.waitLock(30000); // Wait up to 30 seconds for lock
   } catch (lockErr) {
-    return jsonResponse({ error: "Server busy, could not acquire script lock", details: lockErr.toString() }, 429);
+    return jsonResponse(
+      { error: "Server busy, could not acquire script lock", details: lockErr.toString() },
+      429,
+    );
   }
 
   try {
@@ -291,8 +321,11 @@ function doPost(e) {
 
     const eventType = (payload.type || payload.action || "").toUpperCase();
     const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const sheetNew = ss.getSheetByName(CONFIG.SHEET_NEW_TO_CONTACT) || ss.insertSheet(CONFIG.SHEET_NEW_TO_CONTACT);
-    const sheetPinned = ss.getSheetByName(CONFIG.SHEET_PINNED_IMPORTANT) || ss.insertSheet(CONFIG.SHEET_PINNED_IMPORTANT);
+    const sheetNew =
+      ss.getSheetByName(CONFIG.SHEET_NEW_TO_CONTACT) || ss.insertSheet(CONFIG.SHEET_NEW_TO_CONTACT);
+    const sheetPinned =
+      ss.getSheetByName(CONFIG.SHEET_PINNED_IMPORTANT) ||
+      ss.insertSheet(CONFIG.SHEET_PINNED_IMPORTANT);
 
     // Ensure header row exists on both sheets
     ensureHeaders(sheetNew, false);
@@ -303,7 +336,7 @@ function doPost(e) {
       return jsonResponse({
         status: "ok",
         message: "Connected to Google Sheets successfully! Ready for live sync.",
-        spreadsheet: ss.getName()
+        spreadsheet: ss.getName(),
       });
     }
 
@@ -311,8 +344,9 @@ function doPost(e) {
     if (eventType === "BULK_SYNC" || eventType === "BATCH_SYNC") {
       setupSheets();
       const leads = payload.leads || [];
-      const isChunked = (payload.total_chunks && payload.total_chunks > 1);
-      const isFirstChunk = (!isChunked || payload.chunk_index === 0 || payload.is_first_chunk === true);
+      const isChunked = payload.total_chunks && payload.total_chunks > 1;
+      const isFirstChunk =
+        !isChunked || payload.chunk_index === 0 || payload.is_first_chunk === true;
 
       // Only clear existing data rows on the first chunk or single full sync
       if (isFirstChunk) {
@@ -330,7 +364,7 @@ function doPost(e) {
       const unpinnedNewRows = [];
       const pinnedRows = [];
 
-      leads.forEach(function(l) {
+      leads.forEach(function (l) {
         // Strictly only process "New to contact" leads
         if (!isNewToContact(l.cs_status)) return;
         const row = leadToRow(l);
@@ -344,12 +378,16 @@ function doPost(e) {
       if (unpinnedNewRows.length > 0) {
         const startRow = sheetNew.getLastRow() + 1;
         ensureCapacity(sheetNew, startRow + unpinnedNewRows.length);
-        sheetNew.getRange(startRow, 1, unpinnedNewRows.length, CONFIG.HEADERS.length).setValues(unpinnedNewRows);
+        sheetNew
+          .getRange(startRow, 1, unpinnedNewRows.length, CONFIG.HEADERS.length)
+          .setValues(unpinnedNewRows);
       }
       if (pinnedRows.length > 0) {
         const startRow = sheetPinned.getLastRow() + 1;
         ensureCapacity(sheetPinned, startRow + pinnedRows.length);
-        sheetPinned.getRange(startRow, 1, pinnedRows.length, CONFIG.HEADERS.length).setValues(pinnedRows);
+        sheetPinned
+          .getRange(startRow, 1, pinnedRows.length, CONFIG.HEADERS.length)
+          .setValues(pinnedRows);
       }
 
       SpreadsheetApp.flush();
@@ -359,7 +397,7 @@ function doPost(e) {
         chunkIndex: payload.chunk_index || 0,
         totalChunks: payload.total_chunks || 1,
         unpinnedCount: unpinnedNewRows.length,
-        pinnedCount: pinnedRows.length
+        pinnedCount: pinnedRows.length,
       });
     }
 
@@ -386,7 +424,7 @@ function doPost(e) {
         leadId: leadId,
         rowsShifted: true,
         deletedFromNew: deletedFromNew,
-        deletedFromPinned: deletedFromPinned
+        deletedFromPinned: deletedFromPinned,
       });
     }
 
@@ -395,7 +433,7 @@ function doPost(e) {
     // If a lead changes status to anything else (e.g. Contacted, Quoted, Booked, Lost),
     // it is automatically removed from the sheets, shifting subsequent rows UP!
     const rowValues = leadToRow(rec);
-    const isPinned = (rec.pinned_important === true);
+    const isPinned = rec.pinned_important === true;
     const isNew = isNewToContact(rec.cs_status);
 
     if (eventType === "UPDATE" || eventType === "INSERT") {
@@ -410,7 +448,7 @@ function doPost(e) {
           leadId: leadId,
           rowsShifted: true,
           deletedFromNew: deletedFromNew,
-          deletedFromPinned: deletedFromPinned
+          deletedFromPinned: deletedFromPinned,
         });
       }
 
@@ -431,7 +469,7 @@ function doPost(e) {
         success: true,
         action: eventType,
         sheet: isPinned ? CONFIG.SHEET_PINNED_IMPORTANT : CONFIG.SHEET_NEW_TO_CONTACT,
-        leadId: leadId
+        leadId: leadId,
       });
     }
 
@@ -497,9 +535,13 @@ function upsertLeadRow(sheet, leadId, rowValues) {
 
   const data = sheet.getRange(2, 1, lastRow - 1, CONFIG.HEADERS.length).getValues();
   for (let i = 0; i < data.length; i++) {
-    const rowId = String(data[i][12] || "").trim().toLowerCase();
+    const rowId = String(data[i][12] || "")
+      .trim()
+      .toLowerCase();
     const rowPhoneDigits = String(data[i][2] || "").replace(/\D/g, "");
-    const rowName = String(data[i][1] || "").trim().toLowerCase();
+    const rowName = String(data[i][1] || "")
+      .trim()
+      .toLowerCase();
 
     let match = false;
     // 1. Match by Lead ID
@@ -509,7 +551,10 @@ function upsertLeadRow(sheet, leadId, rowValues) {
       // 2. Fallback match by phone number
       if (phoneDigitsList.length > 0 && rowPhoneDigits.length >= 7) {
         for (let p = 0; p < phoneDigitsList.length; p++) {
-          if (rowPhoneDigits.indexOf(phoneDigitsList[p]) !== -1 || phoneDigitsList[p].indexOf(rowPhoneDigits) !== -1) {
+          if (
+            rowPhoneDigits.indexOf(phoneDigitsList[p]) !== -1 ||
+            phoneDigitsList[p].indexOf(rowPhoneDigits) !== -1
+          ) {
             match = true;
             break;
           }
@@ -525,7 +570,12 @@ function upsertLeadRow(sheet, leadId, rowValues) {
       const rowPosition = i + 2;
       // Preserve existing cell values if the incoming update payload left them empty
       for (let col = 0; col < CONFIG.HEADERS.length; col++) {
-        if ((rowValues[col] === "" || rowValues[col] === null || rowValues[col] === undefined) && data[i][col] !== "" && data[i][col] !== null && data[i][col] !== undefined) {
+        if (
+          (rowValues[col] === "" || rowValues[col] === null || rowValues[col] === undefined) &&
+          data[i][col] !== "" &&
+          data[i][col] !== null &&
+          data[i][col] !== undefined
+        ) {
           rowValues[col] = data[i][col];
         }
       }
@@ -559,9 +609,13 @@ function deleteLeadRow(sheet, leadId, fallbackPhone, fallbackName) {
 
   // Search backwards so deleting a row does not distort subsequent indices
   for (let i = data.length - 1; i >= 0; i--) {
-    const rowId = String(data[i][12] || "").trim().toLowerCase();
+    const rowId = String(data[i][12] || "")
+      .trim()
+      .toLowerCase();
     const rowPhoneDigits = String(data[i][2] || "").replace(/\D/g, "");
-    const rowName = String(data[i][1] || "").trim().toLowerCase();
+    const rowName = String(data[i][1] || "")
+      .trim()
+      .toLowerCase();
 
     let match = false;
     // 1. Match by Lead ID
@@ -571,7 +625,10 @@ function deleteLeadRow(sheet, leadId, fallbackPhone, fallbackName) {
       // 2. Fallback match by phone
       if (phoneDigitsList.length > 0 && rowPhoneDigits.length >= 7) {
         for (let p = 0; p < phoneDigitsList.length; p++) {
-          if (rowPhoneDigits.indexOf(phoneDigitsList[p]) !== -1 || phoneDigitsList[p].indexOf(rowPhoneDigits) !== -1) {
+          if (
+            rowPhoneDigits.indexOf(phoneDigitsList[p]) !== -1 ||
+            phoneDigitsList[p].indexOf(rowPhoneDigits) !== -1
+          ) {
             match = true;
             break;
           }
@@ -594,6 +651,7 @@ function deleteLeadRow(sheet, leadId, fallbackPhone, fallbackName) {
 }
 
 function jsonResponse(data, code) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
+  return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(
+    ContentService.MimeType.JSON,
+  );
 }
