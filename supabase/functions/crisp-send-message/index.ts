@@ -34,7 +34,10 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authErr } = await supabase.auth.getUser(token);
+    const {
+      data: { user },
+      error: authErr,
+    } = await supabase.auth.getUser(token);
 
     if (authErr || !user) {
       return new Response(JSON.stringify({ error: "Invalid or expired session" }), {
@@ -59,8 +62,10 @@ serve(async (req) => {
     const roles = (userRoles || []).map((r: { role: string }) => r.role);
     if (!roles.some((r) => ALLOWED_ROLES.includes(r))) {
       return new Response(
-        JSON.stringify({ error: "Forbidden: Crisp Chat is restricted to admin, cs_admin, and cs roles." }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Forbidden: Crisp Chat is restricted to admin, cs_admin, and cs roles.",
+        }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -69,10 +74,13 @@ serve(async (req) => {
     const content = String(body.content || "").trim();
 
     if (!conversationId || !content) {
-      return new Response(JSON.stringify({ error: "conversation_id and non-empty content are required" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "conversation_id and non-empty content are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     // FETCH FROM DATABASE: crisp_website_id and crisp_session_id
@@ -101,19 +109,26 @@ serve(async (req) => {
 
     if (wsErr || !wsRecord?.enabled || !wsRecord.credential_secret_id) {
       return new Response(
-        JSON.stringify({ error: "Workspace is missing, disabled, or not configured in Supabase Vault." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: "Workspace is missing, disabled, or not configured in Supabase Vault.",
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const { data: secretData, error: secretErr } = await supabase.rpc("crisp_get_workspace_secret", {
-      p_secret_id: wsRecord.credential_secret_id,
-    });
+    const { data: secretData, error: secretErr } = await supabase.rpc(
+      "crisp_get_workspace_secret",
+      {
+        p_secret_id: wsRecord.credential_secret_id,
+      },
+    );
 
     if (secretErr || !secretData?.token_id || !secretData?.token_key) {
       return new Response(
-        JSON.stringify({ error: `Workspace Vault credentials are unavailable: ${secretErr?.message ?? "missing token"}` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          error: `Workspace Vault credentials are unavailable: ${secretErr?.message ?? "missing token"}`,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -122,11 +137,11 @@ serve(async (req) => {
 
     const authString = btoa(`${tokenId}:${tokenKey}`);
     const crispUrl = `https://api.crisp.chat/v1/website/${websiteId}/conversation/${sessionId}/message`;
-    
+
     const crispResponse = await fetch(crispUrl, {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${authString}`,
+        Authorization: `Basic ${authString}`,
         "X-Crisp-Tier": "website",
         "Content-Type": "application/json",
       },
@@ -148,15 +163,17 @@ serve(async (req) => {
         responseData?.message ||
         `Crisp API status ${crispResponse.status}`;
 
-      return new Response(
-        JSON.stringify({ error: reason }),
-        { status: crispResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: reason }), {
+        status: crispResponse.status,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const crispMsgData = responseData.data || responseData;
     const crispMsgId = String(crispMsgData.fingerprint || Date.now());
-    const sentAt = crispMsgData.timestamp ? new Date(crispMsgData.timestamp).toISOString() : new Date().toISOString();
+    const sentAt = crispMsgData.timestamp
+      ? new Date(crispMsgData.timestamp).toISOString()
+      : new Date().toISOString();
 
     // Update conversation (clearing needs-reply state)
     await supabase
@@ -186,13 +203,16 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ status: "success", crisp_message_id: crispMsgId, sent_at: sentAt }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Crisp send message error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });

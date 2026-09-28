@@ -43,7 +43,10 @@ serve(async (req) => {
       global: { headers: { Authorization: `Bearer ${callerToken}` } },
     });
 
-    const { data: { user }, error: userErr } = await callerClient.auth.getUser();
+    const {
+      data: { user },
+      error: userErr,
+    } = await callerClient.auth.getUser();
 
     if (userErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized: Invalid session" }), {
@@ -110,18 +113,28 @@ serve(async (req) => {
       .maybeSingle();
 
     if (wsErr || !ws?.credential_secret_id || !ws.enabled) {
-      return new Response(JSON.stringify({ error: "Workspace not found, disabled, or secret reference missing" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Workspace not found, disabled, or secret reference missing" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const { data: secretData, error: secretErr } = await serviceClient.rpc("crisp_get_workspace_secret", {
-      p_secret_id: ws.credential_secret_id,
-    });
+    const { data: secretData, error: secretErr } = await serviceClient.rpc(
+      "crisp_get_workspace_secret",
+      {
+        p_secret_id: ws.credential_secret_id,
+      },
+    );
 
-    const tokenId = (secretData as any)?.token_id || (secretData as any)?.tokenId;
-    const tokenKey = (secretData as any)?.token_key || (secretData as any)?.tokenKey;
+    const tokenId =
+      (secretData as Record<string, unknown>)?.token_id ||
+      (secretData as Record<string, unknown>)?.tokenId;
+    const tokenKey =
+      (secretData as Record<string, unknown>)?.token_key ||
+      (secretData as Record<string, unknown>)?.tokenKey;
 
     if (secretErr || !tokenId || !tokenKey) {
       return new Response(JSON.stringify({ error: "Vault credentials missing or invalid" }), {
@@ -144,12 +157,15 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ from: "user", origin: "chat" }),
-      }
+      },
     );
 
     if (!crispRes.ok) {
       const errJson = await crispRes.json().catch(() => ({}));
-      const reason = (errJson as any)?.reason || (errJson as any)?.data?.message || `HTTP ${crispRes.status}`;
+      const reason =
+        (errJson as Record<string, unknown>)?.reason ||
+        ((errJson as Record<string, unknown>)?.data as Record<string, unknown>)?.message ||
+        `HTTP ${crispRes.status}`;
       console.error(`Crisp mark-read API failed for session ${sessionId}:`, reason);
       return new Response(JSON.stringify({ error: `Crisp API error: ${reason}` }), {
         status: crispRes.status,
@@ -177,13 +193,16 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ status: "success", session_id: sessionId, website_id: websiteId }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Crisp mark-read error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Internal server error" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({ error: err instanceof Error ? err.message : "Internal server error" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
   }
 });
