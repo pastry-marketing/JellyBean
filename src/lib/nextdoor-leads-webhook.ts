@@ -345,7 +345,6 @@ export async function handleNextdoorLeadsPost(request: Request) {
         canonical_post_id?: string | null;
         canonical_lead_link?: string | null;
         row_key?: string | null;
-        data?: Record<string, string> | null;
         category?: string | null;
         captured_at?: string | null;
         assigned_myself_at?: string | null;
@@ -355,7 +354,6 @@ export async function handleNextdoorLeadsPost(request: Request) {
         canonical_post_id?: string | null;
         canonical_lead_link?: string | null;
         row_key?: string | null;
-        data?: Record<string, string> | null;
         category?: string | null;
         captured_at?: string | null;
         assigned_myself_at?: string | null;

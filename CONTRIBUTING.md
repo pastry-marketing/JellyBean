@@ -78,11 +78,13 @@ All four must be clean. Note there is **no** `typecheck` npm script and **no**
 git hook — CI is the only automated gate, so running these locally is what
 saves you a round trip.
 
-> **Current baseline:** `main` is not clean. `tsc --noEmit` reports 34 pre-existing
-> errors and `eslint --max-warnings 0` reports 35 warnings. See
-> [`docs/known-issues.md`](docs/known-issues.md). Do not let these hide _new_
-> errors from you — compare against the baseline, and prefer fixing the
-> surrounding module while you are in it.
+> **Current baseline:** `tsc --noEmit` is clean (0 errors). `eslint` reports 0
+> errors but **35 warnings**, and CI runs `--max-warnings 0`, so the lint step
+> still fails. All warnings are `react-hooks/exhaustive-deps` and
+> `react-refresh/only-export-components`. See
+> [`docs/known-issues.md`](docs/known-issues.md) for per-site locations. Do not
+> let them hide _new_ warnings from you — compare against the baseline, and
+> prefer fixing the surrounding module while you are in it.
 
 ---
 

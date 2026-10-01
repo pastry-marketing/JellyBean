@@ -228,7 +228,9 @@ export function CrispMessageNotifier() {
             content?: string;
             conversation_id?: string;
           };
-          if (!newMsg?.id) return;
+          // An alert needs both a message id and a conversation to resolve, so
+          // bail early rather than queuing an alert that cannot be actioned.
+          if (!newMsg?.id || !newMsg.conversation_id) return;
 
           // Only notify on incoming customer messages
           const isCustomer =

@@ -1,26 +1,46 @@
 import { createServerFn } from "@tanstack/react-start";
 
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Json } from "@/integrations/supabase/types";
 
 const CRISP_ROLES = ["admin", "cs_admin", "cs"];
 
-async function assertCrispAccess(
-  supabase: {
-    from: (table: string) => {
-      select: (columns: string) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => Promise<{ data: { role: string }[] | null; error: Error | null }>;
-      };
+/**
+ * Minimal structural shape required by the role guards below.
+ *
+ * Deliberately shallow, with `unknown` leaves: giving these helpers a precise
+ * client shape makes TypeScript structurally compare it against
+ * `SupabaseClient<Database>`, which forces instantiation of the entire
+ * generated schema and exhausts the compiler's instantiation depth (TS2589
+ * "type instantiation is excessively deep"). Only `user_roles` is read, so the
+ * result is narrowed explicitly at the single call site instead.
+ */
+type RoleQueryClient = {
+  from: (table: string) => {
+    select: (columns?: string) => {
+      eq: (column: string, value: unknown) => PromiseLike<unknown>;
     };
-  },
-  userId: string,
-) {
-  const { data: roleRows, error: roleErr } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
+  };
+};
+
+type RoleQueryResult = { data: { role: string }[] | null; error: Error | null };
+
+/** Read the caller's `user_roles` rows. Shared by {@link assertCrispAccess} and {@link assertAdmin}. */
+async function fetchCallerRoles(client: unknown, userId: string): Promise<RoleQueryResult> {
+  const supabase = client as RoleQueryClient;
+  const result = await supabase.from("user_roles").select("role").eq("user_id", userId);
+  return (result ?? {}) as RoleQueryResult;
+}
+
+/**
+ * Rejects callers without a Crisp-capable role.
+ *
+ * `client` is typed `unknown` so that accepting it costs no structural
+ * comparison at all; the single cast above is the only place the shape is
+ * asserted.
+ */
+async function assertCrispAccess(client: unknown, userId: string) {
+  const { data: roleRows, error: roleErr } = await fetchCallerRoles(client, userId);
   if (roleErr) throw new Error("Could not verify user roles");
   const roles = (roleRows ?? []).map((r: { role: string }) => String(r.role));
   if (!roles.some((r: string) => CRISP_ROLES.includes(r))) {
@@ -169,7 +189,7 @@ export const sendCrispMessage = createServerFn({ method: "POST" })
       content: data.content,
       message_type: "text",
       sent_at: sentAt,
-      raw_payload: payload,
+      raw_payload: payload as Json,
     });
 
     return { ok: true as const, crisp_message_id: crispMessageId, sent_at: sentAt };
@@ -234,23 +254,12 @@ export const markCrispConversationRead = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-async function assertAdmin(
-  supabase: {
-    from: (table: string) => {
-      select: (columns: string) => {
-        eq: (
-          column: string,
-          value: string,
-        ) => Promise<{ data: { role: string }[] | null; error: Error | null }>;
-      };
-    };
-  },
-  userId: string,
-) {
-  const { data: roleRows, error: roleErr } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId);
+/**
+ * Rejects non-admin callers. See {@link assertCrispAccess} for why the client
+ * parameter is typed `unknown` rather than structurally.
+ */
+async function assertAdmin(client: unknown, userId: string) {
+  const { data: roleRows, error: roleErr } = await fetchCallerRoles(client, userId);
   if (roleErr) throw new Error("Could not verify user roles");
   const roles = (roleRows ?? []).map((r: { role: string }) => String(r.role));
   if (!roles.includes("admin")) {

@@ -5,114 +5,128 @@ Open defects and documentation inconsistencies, recorded 2026-10-01 against
 
 ---
 
-## P1 — CI is failing on `main`
+## P1 — CI lint gate still failing on `main`
 
-`.github/workflows/ci.yml` gates every push and PR on two commands that
-currently fail. This means the repository's own quality signal is broken and
-new work cannot be merged cleanly.
+`.github/workflows/ci.yml` gates every push and PR on two commands. The
+TypeScript step is now clean; the ESLint step is not.
 
-| Check                            | Result                                   |
-| -------------------------------- | ---------------------------------------- |
-| `bunx tsc --noEmit`              | ❌ **34 errors**                         |
-| `bunx eslint . --max-warnings 0` | ❌ **35 warnings** (zero-tolerance flag) |
-| `bun run test:run`               | ✅ 46 / 46                               |
+| Check                            | Result                                      |
+| -------------------------------- | ------------------------------------------- |
+| `bunx tsc --noEmit`              | ✅ **0 errors** (was 34 — fixed 2026-10-01) |
+| `bunx eslint . --max-warnings 0` | ❌ **35 warnings** (zero-tolerance flag)    |
+| `bun run test:run`               | ✅ 46 / 46                                  |
 
-### 1.1 — 34 TypeScript errors, concentrated in Crisp + webhook
+The 34 TypeScript errors have been fixed. See [Resolved below](#resolved--34-typescript-errors)
+for what they were and how they were addressed.
 
-| File                                        | Errors |
-| ------------------------------------------- | -----: |
-| `src/routes/app.crisp-chat.tsx`             |     12 |
-| `src/lib/crisp.functions.ts`                |     10 |
-| `src/lib/crisp.server.ts`                   |      8 |
-| `src/components/crisp-message-notifier.tsx` |      2 |
-| `src/lib/nextdoor-leads-webhook.ts`         |      2 |
+### 1.1 — 35 ESLint warnings
 
-They reduce to **four** root causes.
+Two rules account for all of them.
 
-**(a) `TS2589` — excessively deep type instantiation** — `src/lib/crisp.functions.ts:39`
+**`react-hooks/exhaustive-deps` (21)** — the majority. Mostly `useMemo`
+dependencies built from logical expressions that are re-created on every render,
+so the memo never actually memoises:
 
-```
-Type instantiation is excessively deep and possibly infinite.
-```
+| File                                                 | Pattern                                                                                     |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `src/routes/app.reports.tsx:690,701,748`             | `rawUsers` logical expression                                                               |
+| `src/routes/app.reports.tsx:1355`                    | `allProfiles` logical expression                                                            |
+| `src/routes/app.reports.tsx:802,828`                 | `deptRows` logical expression                                                               |
+| `src/routes/app.reports.tsx:256,267,271,273,279,289` | `series` / `csBuckets` / `prevSeries`                                                       |
+| `src/routes/app.reports.tsx:1269,1279`               | `rawRows` logical expression                                                                |
+| `src/routes/app.raw-leads.tsx:1168`                  | missing `qc`                                                                                |
+| `src/routes/app.submit-lead.tsx:233`                 | missing `isFacebook`                                                                        |
+| `src/routes/app.crisp-chat.tsx` (6)                  | missing `loadConversations` / `loadMessages` / `selectedConversation` / `selectedWebsiteId` |
+
+**`react-refresh/only-export-components` (14)** — `app.reports.tsx:103,126` and
+others export non-component values from component files.
+
+> **Why this is not fixed here.** `exhaustive-deps` is not cosmetic: adding a
+> dependency that is itself re-created each render converts a memo into a
+> recompute, and for the `useEffect` cases can cause an **infinite render
+> loop**. Fixing these correctly means wrapping the offending expressions in
+> their own `useMemo` or converting handlers to `useCallback`, per site, with
+> manual verification in the browser. It should be done as a focused change with
+> the affected pages open — not folded into a type-fix commit.
+>
+> `react-refresh/only-export-components` is the opposite: purely mechanical, but
+> it means moving shared constants into sibling modules.
+>
+> Both are safe to do together as a single dedicated PR.
+
+---
+
+## Resolved — 34 TypeScript errors
+
+Fixed 2026-10-01. `bunx tsc --noEmit` now reports **0 errors**; `bun run lint`
+reports **0 errors / 35 warnings**; tests remain **46 / 46**.
+
+The 34 errors reduced to four root causes. Kept here because the same patterns
+will recur as the Crisp integration grows.
+
+**(a) `TS2589` — excessively deep type instantiation**
 
 The generated `Database` type in `src/integrations/supabase/types.ts` is ~1,718
 lines covering 24 tables, 3 views, ~40 functions and 3 enums. When
-`SupabaseClient<Database>` is threaded through a generic helper, TypeScript
-exhausts its instantiation budget.
+`SupabaseClient<Database>` was passed into helpers that declared their own
+hand-rolled structural client type, TypeScript had to instantiate the entire
+generated schema to check the match and exhausted its budget.
 
-This single error **causes most of the other 33**: the `TS2345` argument errors
-at `crisp.functions.ts:97,187,324,436,457,500,560` are all
-`SupabaseClient<Database, "public", "public", …>` failing to match a parameter
-type, which is the same generic collapsing one level up.
+This one error caused most of the other 33 — the `TS2345` argument errors
+elsewhere in `crisp.functions.ts` were the same generic collapsing one level up.
 
-_Suggested fix:_ narrow the client type at the module boundary — declare a local
-row-type alias for the Crisp tables and type the client against that subset
-rather than the full `Database`. Widening to `SupabaseClient<any>` in that one
-module is a pragmatic stopgap, but prefer the narrow subset so the rest of the
-app keeps inference.
+_Fix applied:_ `assertCrispAccess` and `assertAdmin` now accept the client as
+`unknown` and narrow once through a shared `fetchCallerRoles` helper, so
+accepting a client costs no structural comparison. A deliberately shallow
+`RoleQueryClient` type with `unknown` leaves documents the one query performed.
+No `any` was introduced.
 
-**(b) `TS2339` — untyped Crisp JSON payloads**
+**(b) `TS2339` — untyped Crisp JSON payloads** _(the highest-value fix)_
 
-```
-src/lib/crisp.server.ts:72    Property 'text' does not exist on type 'object'
-src/lib/crisp.server.ts:73    Property 'name' does not exist on type 'object'
-src/routes/app.crisp-chat.tsx:159-162  '.url' '.preview' '.name' '.filename' '.type' '.size'
-src/routes/app.crisp-chat.tsx:184     Property 'toLowerCase' does not exist on type '{}'
-src/routes/app.crisp-chat.tsx:205-206 Property 'duration' does not exist on type '{}'
-```
+Crisp returns attachment payloads as untyped JSON. Because
+`MessageRecord.raw_payload` was `Record<string, unknown>`, a
+`typeof x === "object"` guard narrowed to bare `object`, so reading `.url`,
+`.size`, or `.duration` failed to compile. A mistyped attachment field
+silently drops a customer's photo, so these were the errors most worth fixing
+properly rather than casting away.
 
-Crisp's API returns attachment and rich-content payloads that are typed as bare
-`object` / `{}`. The code reads fields off them directly. This is the **highest
--value fix in the list** because these are live chat paths — a mistyped
-attachment field silently drops a customer's photo.
+_Fix applied:_ introduced explicit `CrispAttachmentContent` and `CrispRawPayload`
+shapes, narrowed once into a local `attachmentContent`, and reused that
+reference for the later `duration` read. `crisp.server.ts`'s
+`parseMessageContent` now narrows `raw` to `Record<string, unknown>` before
+reading `.text` / `.name`.
 
-_Suggested fix:_ declare explicit interfaces (`CrispAttachment`,
-`CrispContentPart`) and add narrowing guards before field access. Note that
-`parseMessageContent` in `crisp.server.ts` already parses `[File]` / `[Image]` /
-`[Audio]` / `[Attachment]` fallbacks — that parsing should be the single source
-of truth rather than each call site re-reading raw fields.
+**(c) `TS2339` — wrong result shape on a query builder** — `crisp.server.ts:255`
 
-**(c) `TS2339` — wrong result shape on a query builder** — `src/lib/crisp.server.ts:255`
+`.data` / `.error` were destructured from a builder whose type did not model
+PostgREST's dual nature.
 
-```
-Property 'error' does not exist on type 'QueryBuilder'
-Property 'data' does not exist on type 'QueryBuilder'
-```
-
-A `QueryBuilder` is being destructured for `.data` / `.error` before it is
-awaited. Without `await` (or a missing `.single()` / `.maybeSingle()`), the
-builder has no result fields.
-
-_Suggested fix:_ `await` the builder, or apply the terminal method that narrows
-the type.
+_Fix applied:_ `QueryBuilder` is now an `interface` extending `PromiseLike<…>`,
+so it is both chainable (`.select().eq().eq().maybeSingle()`) and awaitable
+(`await …upsert(rows).select("id")`). `update` correctly returns `QueryBuilder`.
 
 **(d) `TS2322` — object-literal shape mismatches**
 
-```
-src/lib/crisp.functions.ts:172
-src/components/crisp-message-notifier.tsx:283
-src/lib/nextdoor-leads-webhook.ts:394,403   { id, canonical_post_id, … }
-```
+- `crisp.functions.ts` — the Crisp API response was cast to
+  `{ … } & Record<string, unknown>`, which is not assignable to the `Json`
+  column type. Now cast to `Json`, which is what `res.json()` actually returns.
+- `crisp-message-notifier.tsx` — `conversation_id` was `string | undefined` but
+  is used both to fetch the conversation and to build the alert. Added a real
+  guard (`if (!newMsg?.id || !newMsg.conversation_id) return;`) rather than a
+  cast, since an alert without a conversation cannot be actioned.
+- `nextdoor-leads-webhook.ts` — the row types declared
+  `data?: Record<string, string> | null` while the column is JSONB. `data` was
+  never read from those rows, so the unused field was dropped from the type
+  instead of being cast.
 
-Row inserts and typed payloads drifted from their target types. Low risk, small
-fix — reconcile the literal with the column set.
+---
 
-### 1.2 — 35 ESLint warnings under `--max-warnings 0`
+### Note on dead code
 
-`bun run lint` reports 0 errors and 35 warnings, but CI escalates any warning to
-a failure. Two rules dominate:
-
-- **`react-hooks/exhaustive-deps`** — mostly `useMemo` dependencies built from
-  logical expressions that re-create each render, e.g. `app.reports.tsx:687`
-  (`rawUsers`) and `app.reports.tsx:1347` (`allProfiles`). Also
-  `app.raw-leads.tsx:1168` (missing `qc`) and
-  `app.submit-lead.tsx:233` (missing `isFacebook`).
-- **`react-refresh/only-export-components`** — `app.reports.tsx:103,126` export
-  non-component values from a component file.
-
-Note that `noUnusedLocals` and `noUnusedParameters` are both `false` in
-`tsconfig.json`, and `@typescript-eslint/no-unused-vars` is `"off"` in the ESLint
-config, so dead code is not currently flagged anywhere.
+`noUnusedLocals` and `noUnusedParameters` are both `false` in `tsconfig.json`,
+and `@typescript-eslint/no-unused-vars` is `"off"` in the ESLint config, so dead
+code is not currently flagged anywhere. Worth enabling deliberately at some
+point — expect a non-trivial first pass.
 
 ---
 

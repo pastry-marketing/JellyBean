@@ -29,6 +29,7 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   addCrispConversationNote,
   addCrispWorkspace,
@@ -82,9 +83,29 @@ type ConversationRecord = {
   last_message_at: string | null;
   last_customer_unread_at: string | null;
   unread_count: number | null;
-  metadata: Record<string, unknown> | null;
+  metadata: Json | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+/**
+ * Attachment content as Crisp sends it. The webhook payload is untyped JSON, so
+ * these fields are read through an explicit shape rather than off `object`.
+ */
+type CrispAttachmentContent = {
+  url?: string;
+  preview?: string;
+  name?: string;
+  filename?: string;
+  type?: string;
+  size?: number;
+  duration?: number;
+  text?: string;
+};
+
+type CrispRawPayload = {
+  type?: string;
+  content?: string | CrispAttachmentContent;
 };
 
 type MessageRecord = {
@@ -98,7 +119,7 @@ type MessageRecord = {
   content: string;
   message_type: string | null;
   sent_at: string;
-  raw_payload: Record<string, unknown> | null;
+  raw_payload: CrispRawPayload | null;
 };
 
 type WorkspaceRecord = {
@@ -150,16 +171,19 @@ export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | nul
 
   const raw = msg.raw_payload;
   const rawContent = raw?.content;
+  // Narrowed once here so the object fields stay readable further down.
+  const attachmentContent =
+    rawContent && typeof rawContent === "object" ? (rawContent as CrispAttachmentContent) : null;
   let url = "";
   let name = "";
   let type = "";
   let size: number | undefined = undefined;
 
-  if (rawContent && typeof rawContent === "object") {
-    url = rawContent.url || rawContent.preview || "";
-    name = rawContent.name || rawContent.filename || "";
-    type = rawContent.type || "";
-    size = typeof rawContent.size === "number" ? rawContent.size : undefined;
+  if (attachmentContent) {
+    url = attachmentContent.url || attachmentContent.preview || "";
+    name = attachmentContent.name || attachmentContent.filename || "";
+    type = attachmentContent.type || "";
+    size = typeof attachmentContent.size === "number" ? attachmentContent.size : undefined;
   } else if (
     typeof rawContent === "string" &&
     (rawContent.startsWith("http://") || rawContent.startsWith("https://"))
@@ -202,8 +226,8 @@ export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | nul
   const isFile = !isImage && !isAudio;
 
   if (isAudio) {
-    if (typeof rawContent?.duration === "number") {
-      name = `Voice Message (${Math.round(rawContent.duration)}s)`;
+    if (typeof attachmentContent?.duration === "number") {
+      name = `Voice Message (${Math.round(attachmentContent.duration)}s)`;
     } else {
       name = "Voice Note";
     }

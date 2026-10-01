@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom", "dom.iterable", "dom.asynciterable", "esnext"],
+    "strict": true,
+    "noImplicitAny": true
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "semiColons": true,
+    "singleQuote": false
+  },
+  "exclude": ["**/_shared/**"]
+}

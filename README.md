@@ -361,6 +361,24 @@ additionally reads `SUPABASE_ANON_KEY`. Deploy with:
 supabase functions deploy crisp-webhook
 ```
 
+### Working on edge functions locally
+
+Edge Functions are **Deno**, not Node. They are configured by
+`supabase/functions/deno.json` and are explicitly **excluded** from the app's
+`tsconfig.json` — their remote `https://` imports and the `Deno` global are
+unresolvable in the app's Node/Vite project, and including them makes editors
+report phantom errors against VS Code's internal libs.
+
+Use the Deno CLI or the Deno VS Code extension for these files:
+
+```bash
+deno check supabase/functions/*/index.ts   # type check
+deno lint  supabase/functions/*/index.ts   # lint
+```
+
+They are still formatted by Prettier through ESLint (`bun run format` covers
+them), so keep `deno check` and `bun run lint` both clean.
+
 ---
 
 ## Quality gates
@@ -373,23 +391,29 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR to `main`:
 
 A second workflow enforces [Conventional Commits](https://www.conventionalcommits.org/) PR titles.
 
-> ### ⚠️ Current status: CI is failing on `main`
+> ### ⚠️ Current status: the lint gate still fails on `main`
 >
-> At the time of writing, step 2 reports **34 pre-existing type errors** and step 3 reports
-> **35 warnings** (which `--max-warnings 0` treats as failures). All 46 tests pass.
+> The TypeScript step is clean. The ESLint step is not.
 >
-> | Check               | Result                   |
-> | ------------------- | ------------------------ |
-> | `bun run test:run`  | ✅ 46 / 46               |
-> | `bunx tsc --noEmit` | ❌ 34 errors             |
-> | `bun run lint`      | ⚠️ 0 errors, 35 warnings |
+> | Check               | Result                            |
+> | ------------------- | --------------------------------- |
+> | `bun run test:run`  | ✅ 46 / 46                        |
+> | `bunx tsc --noEmit` | ✅ 0 errors (34 fixed 2026-10-01) |
+> | `bun run lint`      | ⚠️ 0 errors, 35 warnings          |
 >
-> Errors are concentrated in the Crisp and webhook modules:
-> `src/routes/app.crisp-chat.tsx` (12), `src/lib/crisp.functions.ts` (10),
-> `src/lib/crisp.server.ts` (8), `src/components/crisp-message-notifier.tsx` (2),
-> `src/lib/nextdoor-leads-webhook.ts` (2).
+> All 35 warnings come from two rules: `react-hooks/exhaustive-deps` (21) and
+> `react-refresh/only-export-components` (14), concentrated in
+> `src/routes/app.reports.tsx`, `app.crisp-chat.tsx`, `app.raw-leads.tsx`, and
+> `app.submit-lead.tsx`.
 >
-> See [`docs/known-issues.md`](docs/known-issues.md) for the full breakdown.
+> These are deliberately **not** fixed alongside the type errors.
+> `exhaustive-deps` fixes that add a re-created dependency can turn a memo into
+> a recompute or cause an infinite render loop in the reports and chat views, so
+> they need per-site work with the affected pages open.
+>
+> Full breakdown and per-site locations: [`docs/known-issues.md`](docs/known-issues.md).
+> To land the branch anyway, either fix the warnings or relax the gate to
+> `--max-warnings 35` as a deliberate, reviewed decision.
 
 ### Conventions
 

@@ -1,23 +1,33 @@
 // Server-only Crisp helpers. These run inside the app server runtime and talk
 // to the Crisp REST API directly using per-workspace credentials stored in Vault.
 
-type QueryBuilder = {
-  select: (cols: string) => QueryBuilder;
+/**
+ * Query-builder shape used by the helpers below.
+ *
+ * Modelled with `interface` + `PromiseLike` because PostgREST builders are both
+ * chainable and thenable: `.select(...).eq(...).eq(...).maybeSingle()` must
+ * keep chaining, while `await client.from(t).upsert(rows).select("id")` must
+ * resolve to `{ data, error }`. Return types are intentionally loose — matching
+ * a real `SupabaseClient<Database>` structurally would force TypeScript to
+ * instantiate the entire generated schema and exhaust the instantiation depth.
+ */
+interface QueryBuilder extends PromiseLike<{
+  data: { id: string }[] | null;
+  error: Error | null;
+}> {
+  select: (cols?: string) => QueryBuilder;
   eq: (col: string, val: unknown) => QueryBuilder;
   maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: Error | null }>;
   single: () => Promise<{ data: { id: string } | null; error: Error | null }>;
   update: (data: unknown) => QueryBuilder;
-  upsert: (
-    data: unknown,
-    opts?: unknown,
-  ) => QueryBuilder & Promise<{ data: { id: string }[] | null; error: Error | null }>;
-};
+  upsert: (data: unknown, opts?: unknown) => QueryBuilder;
+}
 
 type AnyClient = {
   from: (t: string) => QueryBuilder;
   rpc: (
     fn: string,
-    args: Record<string, unknown>,
+    args?: Record<string, unknown>,
   ) => Promise<{ data: Record<string, unknown> | null; error: Error | null }>;
 };
 
@@ -69,8 +79,10 @@ export function parseMessageContent(msg: Record<string, unknown>): string {
   const raw = msg?.content;
   if (typeof raw === "string" && raw.trim()) return raw.trim();
   if (raw && typeof raw === "object") {
-    if (typeof raw.text === "string" && raw.text.trim()) return raw.text.trim();
-    if (typeof raw.name === "string" && raw.name.trim()) return raw.name.trim();
+    // Crisp attachment payloads arrive as untyped JSON; narrow before reading.
+    const parts = raw as Record<string, unknown>;
+    if (typeof parts.text === "string" && parts.text.trim()) return parts.text.trim();
+    if (typeof parts.name === "string" && parts.name.trim()) return parts.name.trim();
   }
   const type = msg?.type;
   if (type === "file" || type === "attachment") return "[File]";
