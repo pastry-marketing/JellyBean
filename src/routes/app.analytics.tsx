@@ -239,10 +239,13 @@ function Inner({ isAdmin }: { isAdmin: boolean }) {
     placeholderData: keepPreviousData,
   });
 
-  const series = analytics.data?.series ?? [];
-  const prevSeries = analytics.data?.prevSeries ?? [];
-  const csBuckets = analytics.data?.csBuckets ?? [];
-  const forwarders = analytics.data?.forwarders ?? [];
+  // Wrapped so the identity is stable across renders; `?? []` alone allocates a
+  // fresh array every render, which defeats every downstream useMemo that
+  // depends on these.
+  const series = useMemo(() => analytics.data?.series ?? [], [analytics.data]);
+  const prevSeries = useMemo(() => analytics.data?.prevSeries ?? [], [analytics.data]);
+  const csBuckets = useMemo(() => analytics.data?.csBuckets ?? [], [analytics.data]);
+  const forwarders = useMemo(() => analytics.data?.forwarders ?? [], [analytics.data]);
 
   const totals = useMemo(() => {
     const t = { captured: 0, forwarded: 0, sentToCS: 0, wrong: 0 };
@@ -780,7 +783,7 @@ function SentToCsSection({
     placeholderData: keepPreviousData,
   });
 
-  const deptRows = deptLeadsQuery.data ?? [];
+  const deptRows = useMemo(() => deptLeadsQuery.data ?? [], [deptLeadsQuery.data]);
 
   // Totals by department for pills
   const deptCounts = useMemo(() => {
@@ -1247,7 +1250,7 @@ function DeptLeadsChart({ since, until }: { since: string; until: string }) {
     placeholderData: keepPreviousData,
   });
 
-  const rawRows = deptQuery.data ?? [];
+  const rawRows = useMemo(() => deptQuery.data ?? [], [deptQuery.data]);
 
   // Calculate department totals for pills
   const deptTotals = useMemo(() => {

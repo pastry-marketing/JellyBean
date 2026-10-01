@@ -9,51 +9,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { bindConfirmDialogProvider } from "@/components/confirm-dialog-store";
+import type { Pending } from "@/components/confirm-dialog-store";
 import { cn } from "@/lib/utils";
-
-type ConfirmOptions = {
-  title?: string;
-  description?: string;
-  confirmText?: string;
-  cancelText?: string;
-  tone?: "default" | "destructive";
-};
-
-type Pending = ConfirmOptions & { resolve: (v: boolean) => void };
-
-let setPending: ((p: Pending | null) => void) | null = null;
-
-export function confirmDialog(opts: ConfirmOptions = {}): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (!setPending) {
-      // Fallback if provider not mounted
-      resolve(window.confirm(opts.description ?? opts.title ?? "Are you sure?"));
-      return;
-    }
-    setPending({ ...opts, resolve });
-  });
-}
-
-export async function confirmDiscardUnsaved(isDirty: boolean): Promise<boolean> {
-  if (!isDirty) return true;
-  return confirmDialog({
-    title: "Discard unsaved changes?",
-    description: "You have unsaved changes that will be lost if you close now.",
-    confirmText: "Discard",
-    cancelText: "Keep editing",
-    tone: "destructive",
-  });
-}
 
 export function ConfirmDialogProvider() {
   const [pending, setP] = useState<Pending | null>(null);
 
-  useEffect(() => {
-    setPending = setP;
-    return () => {
-      setPending = null;
-    };
-  }, []);
+  useEffect(() => bindConfirmDialogProvider(setP), []);
 
   const handle = (result: boolean) => {
     if (pending) pending.resolve(result);

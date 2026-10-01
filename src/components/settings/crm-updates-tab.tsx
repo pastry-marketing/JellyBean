@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { confirmDialog } from "@/components/confirm-dialog";
+import { confirmDialog } from "@/components/confirm-dialog-store";
 
 const ALL_ROLES: { value: AppRole; label: string }[] = [
   { value: "admin", label: "Admin" },

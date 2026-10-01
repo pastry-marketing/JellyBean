@@ -391,29 +391,19 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR to `main`:
 
 A second workflow enforces [Conventional Commits](https://www.conventionalcommits.org/) PR titles.
 
-> ### ⚠️ Current status: the lint gate still fails on `main`
+> ### Current status: all CI gates green
 >
-> The TypeScript step is clean. The ESLint step is not.
+> | Check                            | Result        |
+> | -------------------------------- | ------------- |
+> | `bun run test:run`               | ✅ 46 / 46    |
+> | `bunx tsc --noEmit`              | ✅ 0 errors   |
+> | `bunx eslint . --max-warnings 0` | ✅ 0 warnings |
 >
-> | Check               | Result                            |
-> | ------------------- | --------------------------------- |
-> | `bun run test:run`  | ✅ 46 / 46                        |
-> | `bunx tsc --noEmit` | ✅ 0 errors (34 fixed 2026-10-01) |
-> | `bun run lint`      | ⚠️ 0 errors, 35 warnings          |
->
-> All 35 warnings come from two rules: `react-hooks/exhaustive-deps` (21) and
-> `react-refresh/only-export-components` (14), concentrated in
-> `src/routes/app.reports.tsx`, `app.crisp-chat.tsx`, `app.raw-leads.tsx`, and
-> `app.submit-lead.tsx`.
->
-> These are deliberately **not** fixed alongside the type errors.
-> `exhaustive-deps` fixes that add a re-created dependency can turn a memo into
-> a recompute or cause an infinite render loop in the reports and chat views, so
-> they need per-site work with the affected pages open.
->
-> Full breakdown and per-site locations: [`docs/known-issues.md`](docs/known-issues.md).
-> To land the branch anyway, either fix the warnings or relax the gate to
-> `--max-warnings 35` as a deliberate, reviewed decision.
+> All three passed as of 2026-10-01 (previously 34 type errors and 35 lint
+> warnings). Two gaps remain, documented in
+> [`docs/known-issues.md`](docs/known-issues.md): `vitest` is not yet run in CI,
+> and five `react-hooks/exhaustive-deps` suppressions in `app.crisp-chat.tsx` are
+> deliberate — they stop the Realtime channel resubscribing on every render.
 
 ### Conventions
 

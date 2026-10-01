@@ -85,7 +85,7 @@ import {
 } from "@/lib/raw-leads.functions";
 import { calculateTotalPages, calculateLastPageSize } from "@/lib/raw-leads-keyset";
 
-import { confirmDialog, confirmDiscardUnsaved } from "@/components/confirm-dialog";
+import { confirmDialog, confirmDiscardUnsaved } from "@/components/confirm-dialog-store";
 import { saveDraft, deleteDraftForSource, countMyDrafts, type LeadDraft } from "@/lib/lead-drafts";
 import { FolderOpen } from "lucide-react";
 

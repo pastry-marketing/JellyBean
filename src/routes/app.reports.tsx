@@ -100,7 +100,7 @@ const RAW_LABELS: Record<string, string> = {
   duplicate: "Duplicate",
 };
 
-export const CS_LABELS: Record<string, string> = {
+const CS_LABELS: Record<string, string> = {
   new: "New to contact",
   undeliver: "Undeliver",
   wrong_number: "Wrong Number",
@@ -123,7 +123,7 @@ const RAW_COLORS: Record<string, string> = {
   duplicate: "#a855f7",
 };
 
-export const CS_STATUS_COLORS: Record<string, string> = {
+const CS_STATUS_COLORS: Record<string, string> = {
   new: "#38bdf8",
   converted: "#4ade80",
   need_follow_up: "#60a5fa",
@@ -684,7 +684,7 @@ function ForwardedByUserSection({
     },
   });
 
-  const rawUsers = byUserQuery.data ?? [];
+  const rawUsers = useMemo(() => byUserQuery.data ?? [], [byUserQuery.data]);
   const totalForwardedAll = useMemo(
     () => rawUsers.reduce((sum, u) => sum + u.forwarded_count, 0),
     [rawUsers],
@@ -1344,7 +1344,7 @@ function PersonServiceReport({ range }: { range: RangeResult }) {
     staleTime: 10 * 60_000,
   });
 
-  const allProfiles = profiles.data ?? [];
+  const allProfiles = useMemo(() => profiles.data ?? [], [profiles.data]);
   const filteredProfiles = useMemo(
     () =>
       allProfiles.filter(

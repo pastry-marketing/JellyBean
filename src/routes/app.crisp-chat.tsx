@@ -144,7 +144,7 @@ type NoteRecord = {
   can_delete?: boolean;
 };
 
-export function isCrispMaskedMessage(content: string | null | undefined): boolean {
+function isCrispMaskedMessage(content: string | null | undefined): boolean {
   if (!content) return false;
   const trimmed = content.trim();
   if (!trimmed) return false;
@@ -164,7 +164,7 @@ export type CrispAttachment = {
   isFile: boolean;
 };
 
-export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | null {
+function getCustomerAttachment(msg: MessageRecord): CrispAttachment | null {
   const isCustomer =
     msg.sender_type === "customer" || msg.sender_type === "user" || msg.direction === "incoming";
   if (!isCustomer) return null;
@@ -252,7 +252,7 @@ export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | nul
   };
 }
 
-export function getDisplayableCaption(
+function getDisplayableCaption(
   content: string | null | undefined,
   attachment: CrispAttachment | null,
 ): string | null {
@@ -293,14 +293,14 @@ export function getDisplayableCaption(
   return trimmed;
 }
 
-export function formatFileSize(bytes?: number): string {
+function formatFileSize(bytes?: number): string {
   if (!bytes || bytes <= 0) return "";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function formatMessageDateTime(dateStr: string | null | undefined): string {
+function formatMessageDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return "";
@@ -317,7 +317,7 @@ export function formatMessageDateTime(dateStr: string | null | undefined): strin
   return `${datePart} • ${timePart}`;
 }
 
-export function formatConversationTime(dateStr: string | null | undefined): string {
+function formatConversationTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return "";
@@ -712,11 +712,19 @@ function CrispInboxInner() {
       // has not yet been populated when loadConversations reads it.
       loadConversations("all", true, activeIds);
     });
+    // Mount-once by design. `loadWorkspaces` / `loadConversations` are plain
+    // functions (new identity every render), so listing them would re-run this
+    // on every render. Fresh values are read through refs instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-run server-side search whenever searchQuery changes
   useEffect(() => {
     loadConversations(selectedWebsiteId, true, undefined, searchQuery);
+    // `selectedWebsiteId` is read at call time on purpose: this effect exists to
+    // re-run the server-side search when `searchQuery` changes, not when the
+    // workspace filter changes (a separate effect below owns that).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   // Reload conversations when selected workspace filter changes
@@ -732,6 +740,10 @@ function CrispInboxInner() {
         setNotes([]);
       }
     }
+    // `conversations` is deliberately omitted: reading it here would make this
+    // effect depend on the list it mutates via `loadConversations`, which
+    // re-fetches and can loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWebsiteId]);
 
   // Load messages & notes when active conversation selection changes
@@ -743,6 +755,7 @@ function CrispInboxInner() {
       setMessages([]);
       setNotes([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversationId]);
 
   // Handle selecting a conversation
@@ -888,6 +901,11 @@ function CrispInboxInner() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(channel);
     };
+    // Mount-once by design. `loadMessages` reads the active conversation through
+    // `selectedConversationIdRef`, so it does not need to be a dependency; adding
+    // it (new identity every render) would tear down and rebuild the realtime
+    // channel and polling interval on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Map of workspace website_id -> workspace_name

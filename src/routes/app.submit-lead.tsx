@@ -37,13 +37,9 @@ import {
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import {
-  LeadForm,
-  uploadLeadImages,
-  type LeadFormValues,
-  type LeadReferenceMode,
-} from "@/components/lead-form";
-import { SignedLeadImage } from "@/lib/lead-attachments";
+import { LeadForm, type LeadFormValues, type LeadReferenceMode } from "@/components/lead-form";
+import { uploadLeadImages } from "@/lib/lead-form-utils";
+import { SignedLeadImage } from "@/lib/lead-attachments.tsx";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toPktWallClockDate, pktNextMidnight } from "@/lib/timezone";
@@ -230,7 +226,7 @@ function Dashboard() {
     }
     const max = series.reduce((m, s) => Math.max(m, s.count), 0);
     return { today, week, month, ranged, series, max, byStatus };
-  }, [leads, range]);
+  }, [leads, range, isFacebook]);
 
   const rangeLabel = range?.from
     ? range.to

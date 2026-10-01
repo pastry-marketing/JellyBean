@@ -13,7 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2, Trash2, FolderOpen, Send } from "lucide-react";
 import { toast } from "sonner";
-import { confirmDialog } from "@/components/confirm-dialog";
+import { confirmDialog } from "@/components/confirm-dialog-store";
 import {
   Table,
   TableBody,

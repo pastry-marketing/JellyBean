@@ -6,7 +6,7 @@ import { Check, Loader2, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { confirmDialog } from "@/components/confirm-dialog";
+import { confirmDialog } from "@/components/confirm-dialog-store";
 import {
   Dialog,
   DialogContent,

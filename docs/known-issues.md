@@ -5,54 +5,111 @@ Open defects and documentation inconsistencies, recorded 2026-10-01 against
 
 ---
 
-## P1 — CI lint gate still failing on `main`
+## P1 — CI gates (resolved 2026-10-01)
 
-`.github/workflows/ci.yml` gates every push and PR on two commands. The
-TypeScript step is now clean; the ESLint step is not.
+`.github/workflows/ci.yml` gates every push and PR on two commands. Both are
+now clean.
 
-| Check                            | Result                                      |
-| -------------------------------- | ------------------------------------------- |
-| `bunx tsc --noEmit`              | ✅ **0 errors** (was 34 — fixed 2026-10-01) |
-| `bunx eslint . --max-warnings 0` | ❌ **35 warnings** (zero-tolerance flag)    |
-| `bun run test:run`               | ✅ 46 / 46                                  |
+| Check                            | Result                     |
+| -------------------------------- | -------------------------- |
+| `bunx tsc --noEmit`              | ✅ **0 errors** (was 34)   |
+| `bunx eslint . --max-warnings 0` | ✅ **0 warnings** (was 35) |
+| `bun run test:run`               | ✅ 46 / 46                 |
 
-The 34 TypeScript errors have been fixed. See [Resolved below](#resolved--34-typescript-errors)
-for what they were and how they were addressed.
+Both were resolved. See [Resolved — 34 TypeScript errors](#resolved--34-typescript-errors)
+and [Resolved — 35 ESLint warnings](#resolved--35-eslint-warnings) below.
 
-### 1.1 — 35 ESLint warnings
+Note: `vitest run` is still **not** part of CI. Adding it is a one-line change to
+the workflow — see [P5](#p5--tests-do-not-run-in-ci).
 
-Two rules account for all of them.
+---
 
-**`react-hooks/exhaustive-deps` (21)** — the majority. Mostly `useMemo`
-dependencies built from logical expressions that are re-created on every render,
-so the memo never actually memoises:
+## Resolved — 35 ESLint warnings
 
-| File                                                 | Pattern                                                                                     |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `src/routes/app.reports.tsx:690,701,748`             | `rawUsers` logical expression                                                               |
-| `src/routes/app.reports.tsx:1355`                    | `allProfiles` logical expression                                                            |
-| `src/routes/app.reports.tsx:802,828`                 | `deptRows` logical expression                                                               |
-| `src/routes/app.reports.tsx:256,267,271,273,279,289` | `series` / `csBuckets` / `prevSeries`                                                       |
-| `src/routes/app.reports.tsx:1269,1279`               | `rawRows` logical expression                                                                |
-| `src/routes/app.raw-leads.tsx:1168`                  | missing `qc`                                                                                |
-| `src/routes/app.submit-lead.tsx:233`                 | missing `isFacebook`                                                                        |
-| `src/routes/app.crisp-chat.tsx` (6)                  | missing `loadConversations` / `loadMessages` / `selectedConversation` / `selectedWebsiteId` |
+Fixed 2026-10-01. Split into the two rules that produced them.
 
-**`react-refresh/only-export-components` (14)** — `app.reports.tsx:103,126` and
-others export non-component values from component files.
+### `react-hooks/exhaustive-deps` (21)
 
-> **Why this is not fixed here.** `exhaustive-deps` is not cosmetic: adding a
-> dependency that is itself re-created each render converts a memo into a
-> recompute, and for the `useEffect` cases can cause an **infinite render
-> loop**. Fixing these correctly means wrapping the offending expressions in
-> their own `useMemo` or converting handlers to `useCallback`, per site, with
-> manual verification in the browser. It should be done as a focused change with
-> the affected pages open — not folded into a type-fix commit.
->
-> `react-refresh/only-export-components` is the opposite: purely mechanical, but
-> it means moving shared constants into sibling modules.
->
-> Both are safe to do together as a single dedicated PR.
+**14 — unstable memo dependencies (real performance bugs).** These were
+`useMemo` values whose dependencies were `x.data ?? []`. The `?? []` allocates
+a fresh array on every render, so the dependent `useMemo`s **never actually
+memoised** — they recomputed on every render, which is exactly what they exist
+to avoid.
+
+Fixed by wrapping each in its own `useMemo`, keyed on the underlying query
+result:
+
+| Location            | Value                                             |
+| ------------------- | ------------------------------------------------- |
+| `app.analytics.tsx` | `series`, `prevSeries`, `csBuckets`, `forwarders` |
+| `app.analytics.tsx` | `deptRows`, `rawRows`                             |
+| `app.reports.tsx`   | `rawUsers`, `allProfiles`                         |
+
+**2 — genuinely missing, safe to add.**
+
+| Location                  | Dependency   | Why safe                                                                  |
+| ------------------------- | ------------ | ------------------------------------------------------------------------- |
+| `app.submit-lead.tsx:233` | `isFacebook` | A `boolean` primitive — stable identity                                   |
+| `app.cs-leads.tsx:1168`   | `qc`         | The context QueryClient singleton; identity is fixed for the app lifetime |
+
+Adding `qc` keeps that effect mount-once: a stable dependency does not
+re-trigger it.
+
+**5 — deliberately suppressed in `app.crisp-chat.tsx`.** Lines 715, 720, 735,
+746, 891. These are **not** oversights, and the rule's advice would be harmful
+here.
+
+`loadConversations`, `loadMessages`, `loadNotes`, `loadWorkspaces` and
+`loadWorkspaceCounts` are plain `async` functions declared in the component
+body, so each has a **new identity on every render**. The page already works
+around this deliberately: it mirrors mutable state into refs
+(`selectedConversationIdRef`, `selectedWebsiteIdRef`, `workspacesRef`) precisely
+so these effects can stay mount-once.
+
+Listing the loaders as dependencies would re-run those effects on **every
+render**. For the effect at line 891 that means tearing down and rebuilding the
+Supabase Realtime channel and the 30 s polling interval on every render — and
+`app.cs-leads.tsx` carries an explicit comment that a duplicate Realtime
+subscription would _double message billing for every CS user_.
+
+Each suppression therefore carries a comment explaining the intent, matching the
+existing `eslint-disable` precedent in `src/lib/lead-attachments.ts`.
+
+> **Recommended follow-up:** stabilise the loaders with `useCallback` so the
+> rule can be satisfied honestly. Two blockers make that non-trivial:
+> `loadConversations` reads `convPage` and `searchQuery` as state, and
+> `convPage` drives infinite-scroll pagination — `convPage: 0 → 1` would
+> change the loader's identity and re-trigger the workspace effect, which
+> resets the page to 0. That needs mirroring `convPage` into a ref, and should
+> be done with the conversation list open in a browser, not blind.
+
+### `react-refresh/only-export-components` (14)
+
+Mixed non-component exports out of component modules, so Fast Refresh works
+correctly during development.
+
+| Location                        | Action                                                                                                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `components/confirm-dialog.tsx` | Moved `confirmDialog`, `confirmDiscardUnsaved`, types and the pending store into new `confirm-dialog-store.ts`; provider now binds via `bindConfirmDialogProvider` |
+| `lib/lead-attachments.tsx`      | Split into `lead-attachments.ts` (`toStoragePath`, `useSignedLeadUrls`) and a component-only `lead-attachments.tsx` (`SignedLeadImage`)                            |
+| `components/lead-form.tsx`      | Moved `formatPhoneInput` and `uploadLeadImages` into new `lib/lead-form-utils.ts`                                                                                  |
+| `routes/app.crisp-chat.tsx`     | Six helpers are file-local only — dropped the `export` keyword                                                                                                     |
+| `routes/app.reports.tsx`        | `CS_LABELS` / `CS_STATUS_COLORS` are file-local only — dropped `export`                                                                                            |
+
+Import sites were updated: 7 files now import from `confirm-dialog-store`, 2
+from `lead-form-utils`.
+
+Two duplication findings worth noting, left alone deliberately:
+
+- **`CS_LABELS` is defined three times** — `app.reports.tsx`, `app.analytics.tsx`
+  and `app.index.tsx`. They are **not** identical: coverage differs and casing
+  differs (`"Wrong Number"` vs `"Wrong number"`). These look intentionally
+  page-specific, so consolidating them would change rendered labels and needs a
+  product decision, not a lint fix.
+- **`isCrispMaskedMessage` is defined three times** — `app.crisp-chat.tsx`,
+  `components/crisp-message-notifier.tsx` and `lib/crisp.server.ts`. The bodies
+  are equivalent, but two of the copies sit on the client and one on the server,
+  so a shared import would need care. Left as-is.
 
 ---
 

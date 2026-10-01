@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatPhone, normalizePhone } from "@/lib/crm-lite";
+import { formatPhoneInput } from "@/lib/lead-form-utils";
 import { checkDuplicatePhone } from "@/lib/raw-leads.functions";
 import {
   compressVideoInBrowser,
@@ -34,8 +35,6 @@ import {
 } from "@/components/duplicate-lead-dialog";
 import { useSignedLeadUrls } from "@/lib/lead-attachments";
 import { ServiceCombobox } from "@/components/service-combobox";
-
-const BUCKET = "lead-attachments";
 const MAX_IMAGES = 20;
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -85,48 +84,6 @@ type LeadFormInitialValues = {
   id?: string;
   originalLeadLink?: string | null;
 };
-
-export function formatPhoneInput(value: string): string {
-  const digits = normalizePhone(value);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-}
-
-export function uploadLeadImages({
-  files,
-  userId,
-  supabase,
-}: {
-  files: File[];
-  userId: string;
-  supabase: {
-    storage: {
-      from: (bucket: string) => {
-        upload: (
-          path: string,
-          file: File,
-          options: { cacheControl: string; upsert: boolean; contentType: string },
-        ) => Promise<{ error: { message: string } | null }>;
-      };
-    };
-  };
-}) {
-  return Promise.all(
-    files.map(async (file) => {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type,
-      });
-      if (error) throw new Error(`Upload failed: ${error.message}`);
-      // Store the storage path (bucket is private; render via signed URLs).
-      return path;
-    }),
-  );
-}
 
 export function LeadForm({
   title = "Lead form",

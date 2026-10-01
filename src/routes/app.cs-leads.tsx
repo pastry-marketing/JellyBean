@@ -92,7 +92,7 @@ import { rephraseLeadTemplateWithAi, autoRephraseLeadWithAi } from "@/lib/raw-le
 import { SERVICE_CATEGORIES } from "@/data/service-options";
 
 import { cn } from "@/lib/utils";
-import { confirmDiscardUnsaved } from "@/components/confirm-dialog";
+import { confirmDiscardUnsaved } from "@/components/confirm-dialog-store";
 
 // Garage Door filter: match specific phrases (case-insensitive) across
 // service/pass_it_to and lead text fields. Avoids bare "garage" which
@@ -1165,7 +1165,9 @@ function Inner() {
       clearTimeout(t);
       supabase.removeChannel(channel);
     };
-  }, []);
+    // `qc` is the context QueryClient singleton — its identity is stable for the
+    // app lifetime, so listing it does not re-run this mount-once subscription.
+  }, [qc]);
 
   useEffect(() => {
     if (!incomingLead) return;
