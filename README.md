@@ -24,6 +24,7 @@ Nextdoor scraping → AI qualification → customer-service pipeline → outcome
 - [Quick start](#quick-start)
 - [Environment variables](#environment-variables)
 - [Scripts](#scripts)
+- [Daily tasks](#daily-tasks)
 - [Project structure](#project-structure)
 - [Database](#database)
 - [Edge functions](#edge-functions)
@@ -272,6 +273,19 @@ in **Supabase Vault**, and linked through the `crisp_workspaces` table. Do **not
 
 ---
 
+## Daily tasks
+
+If you use JellyBean to do your job, start at **[`docs/daily-tasks.md`](docs/daily-tasks.md)**
+rather than here. It covers the daily routine for each of the nine roles, the raw
+lead and CS status values, the two timezone rules, and what to do when something
+breaks.
+
+In short: the pipeline is **Raw Leads → Forwarded → CS Pipeline → outcome**, and
+each stage has an owner. A lead's value depends on someone recording an honest,
+specific status the same day they made contact.
+
+---
+
 ## Project structure
 
 ```
@@ -503,6 +517,8 @@ is mitigated in practice — but see [`docs/known-issues.md`](docs/known-issues.
 
 | Document                                                               | Contents                                                |
 | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| [`docs/daily-tasks.md`](docs/daily-tasks.md)                           | **Start here** — daily routine for every role           |
+| [`CHANGELOG.md`](CHANGELOG.md)                                         | Changes grouped into review units, with risk and checks |
 | [`docs/architecture.md`](docs/architecture.md)                         | Request lifecycle, data layer, caching, realtime design |
 | [`docs/backend-verification.md`](docs/backend-verification.md)         | Read-only production audit: schema, RLS, storage, auth  |
 | [`docs/known-issues.md`](docs/known-issues.md)                         | Open defects and inconsistencies, with severity         |
