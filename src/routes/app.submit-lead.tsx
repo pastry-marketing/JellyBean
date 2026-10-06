@@ -52,9 +52,8 @@ import {
 import {
   roleToBaseGroup,
   fetchBasesForRole,
-  fetchBaseConfig,
   isLeadInBase,
-  enforcementFor,
+  resolveEnforcement,
   type EnforcementMode,
 } from "@/lib/service-area-base";
 import { SignedLeadImage } from "@/lib/lead-attachments.tsx";
@@ -727,17 +726,14 @@ function SubmitForm({
       let inBase = true;
       let mode: EnforcementMode = "warn";
       try {
-        const [bases, configs] = await Promise.all([
-          fetchBasesForRole(baseGroup),
-          fetchBaseConfig(),
-        ]);
+        const bases = await fetchBasesForRole(baseGroup);
         inBase = isLeadInBase({
           bases,
           service: values.service,
           stateCode: values.stateCode,
           city: values.area,
         });
-        mode = enforcementFor(configs, baseGroup);
+        mode = resolveEnforcement(bases);
       } catch (err) {
         // If the base check fails, don't block the submission — treat as in-base.
         console.error("[ServiceAreaBase] check failed:", err);

@@ -31,13 +31,9 @@ export type ServiceAreaBase = {
   city: string | null;
   active_from: string | null; // YYYY-MM-DD
   active_to: string | null; // YYYY-MM-DD
+  enforcement_mode: EnforcementMode;
   created_by: string | null;
   created_at: string;
-};
-
-export type BaseConfig = {
-  role_group: BaseRole;
-  enforcement_mode: EnforcementMode;
 };
 
 function todayKey(): string {
@@ -103,22 +99,17 @@ export async function fetchAllBases(): Promise<ServiceAreaBase[]> {
   return (data ?? []) as unknown as ServiceAreaBase[];
 }
 
-export async function fetchBaseConfig(): Promise<BaseConfig[]> {
-  const { data, error } = await supabase
-    .from("service_area_base_config" as never)
-    .select("role_group, enforcement_mode");
-  if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as BaseConfig[];
-}
-
-export function enforcementFor(configs: BaseConfig[], group: BaseRole): EnforcementMode {
-  return configs.find((c) => c.role_group === group)?.enforcement_mode ?? "warn";
-}
-
-// The "Out of Base" CS status is only surfaced in the pipeline once some role
-// is set to the "status" enforcement mode.
-export function isOutOfBaseStatusEnabled(configs: BaseConfig[]): boolean {
-  return configs.some((c) => c.enforcement_mode === "status");
+// Enforcement is configured per rule. A lead that falls outside every active
+// rule is moved to the Out of Base status when ANY active rule for its role is
+// set to "status"; otherwise it's warn-only. (With the common single-rule
+// setup this is simply that rule's own action.)
+export function resolveEnforcement(
+  bases: ServiceAreaBase[],
+  today: string = todayKey(),
+): EnforcementMode {
+  return bases.some((b) => isBaseActive(b, today) && b.enforcement_mode === "status")
+    ? "status"
+    : "warn";
 }
 
 export const OUT_OF_BASE_STATUS = "out_of_base";

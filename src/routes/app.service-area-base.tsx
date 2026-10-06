@@ -29,9 +29,7 @@ import {
   type BaseRole,
   type EnforcementMode,
   type ServiceAreaBase,
-  type BaseConfig,
   fetchAllBases,
-  fetchBaseConfig,
   isBaseActive,
 } from "@/lib/service-area-base";
 import { cn } from "@/lib/utils";
@@ -61,10 +59,6 @@ function Page() {
 
 function Inner() {
   const basesQuery = useQuery({ queryKey: ["service-area-bases"], queryFn: fetchAllBases });
-  const configQuery = useQuery({
-    queryKey: ["service-area-base-config"],
-    queryFn: fetchBaseConfig,
-  });
 
   const basesByRole = useMemo(() => {
     const map: Record<BaseRole, ServiceAreaBase[]> = { fb: [], seo: [], nd: [] };
@@ -74,7 +68,7 @@ function Inner() {
     return map;
   }, [basesQuery.data]);
 
-  if (basesQuery.isLoading || configQuery.isLoading) {
+  if (basesQuery.isLoading) {
     return (
       <div className="crm-section-panel">
         <div className="glass-card p-16 text-center text-muted-foreground">
@@ -87,78 +81,19 @@ function Inner() {
   return (
     <div className="space-y-4">
       {BASE_ROLES.map((role) => (
-        <RoleSection
-          key={role}
-          role={role}
-          bases={basesByRole[role]}
-          config={(configQuery.data ?? []).find((c) => c.role_group === role)}
-        />
+        <RoleSection key={role} role={role} bases={basesByRole[role]} />
       ))}
     </div>
   );
 }
 
-function RoleSection({
-  role,
-  bases,
-  config,
-}: {
-  role: BaseRole;
-  bases: ServiceAreaBase[];
-  config?: BaseConfig;
-}) {
-  const auth = useAuth();
-  const qc = useQueryClient();
-  const [savingConfig, setSavingConfig] = useState(false);
-  const enforcement: EnforcementMode = config?.enforcement_mode ?? "warn";
-
-  async function setEnforcement(mode: EnforcementMode) {
-    setSavingConfig(true);
-    try {
-      const { error } = await supabase.from("service_area_base_config" as never).upsert(
-        {
-          role_group: role,
-          enforcement_mode: mode,
-          updated_by: auth.user?.id ?? null,
-          updated_at: new Date().toISOString(),
-        } as never,
-        { onConflict: "role_group" },
-      );
-      if (error) throw new Error(error.message);
-      toast.success(
-        mode === "status"
-          ? "Out-of-base leads will be moved to the Out of Base status"
-          : "Out-of-base leads will be warned about and tagged only",
-      );
-      qc.invalidateQueries({ queryKey: ["service-area-base-config"] });
-    } catch (e) {
-      toast.error(friendlyError(e));
-    } finally {
-      setSavingConfig(false);
-    }
-  }
-
+function RoleSection({ role, bases }: { role: BaseRole; bases: ServiceAreaBase[] }) {
   return (
     <div className="crm-section-panel space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="crm-section-title">{BASE_ROLE_LABEL[role]}</div>
-        <div className="flex items-center gap-2">
-          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-            <ShieldCheck className="h-3.5 w-3.5" /> Out-of-base action
-          </Label>
-          <Select
-            value={enforcement}
-            onValueChange={(v) => void setEnforcement(v as EnforcementMode)}
-            disabled={savingConfig}
-          >
-            <SelectTrigger className="h-9 w-[230px] text-[12px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="warn">Warn only (add + tag)</SelectItem>
-              <SelectItem value="status">Warn + move to Out of Base status</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="text-[11px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+          <ShieldCheck className="h-3.5 w-3.5" /> Out-of-base action is set per rule
         </div>
       </div>
 
@@ -177,6 +112,7 @@ function RoleSection({
                 <th className="text-left px-3 py-2 font-medium">State</th>
                 <th className="text-left px-3 py-2 font-medium">City</th>
                 <th className="text-left px-3 py-2 font-medium">Active window</th>
+                <th className="text-left px-3 py-2 font-medium">If out of base</th>
                 <th className="text-left px-3 py-2 font-medium">Status</th>
                 <th className="text-right px-3 py-2 font-medium">Actions</th>
               </tr>
@@ -243,6 +179,9 @@ function RuleRow({ base }: { base: ServiceAreaBase }) {
         ) : (
           "Always"
         )}
+      </td>
+      <td className="px-3 py-2 text-muted-foreground">
+        {base.enforcement_mode === "status" ? "Warn + move to status" : "Warn only"}
       </td>
       <td className="px-3 py-2">
         <span
@@ -315,6 +254,7 @@ function BaseRuleForm({
   const [city, setCity] = useState(base?.city ?? "");
   const [from, setFrom] = useState(base?.active_from ?? "");
   const [to, setTo] = useState(base?.active_to ?? "");
+  const [enforcement, setEnforcement] = useState<EnforcementMode>(base?.enforcement_mode ?? "warn");
   const [busy, setBusy] = useState(false);
 
   async function submit() {
@@ -341,6 +281,7 @@ function BaseRuleForm({
         city: city.trim() || null,
         active_from: from || null,
         active_to: to || null,
+        enforcement_mode: enforcement,
       };
       if (isEdit && base) {
         const { error } = await supabase
@@ -463,6 +404,21 @@ function BaseRuleForm({
             onChange={(e) => setTo(e.target.value)}
             className="h-9 text-[12px]"
           />
+        </div>
+
+        <div className="space-y-1.5 xl:col-span-2">
+          <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            If a lead is out of base
+          </Label>
+          <Select value={enforcement} onValueChange={(v) => setEnforcement(v as EnforcementMode)}>
+            <SelectTrigger className="h-9 text-[12px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="warn">Warn only (add + tag)</SelectItem>
+              <SelectItem value="status">Warn + move to Out of Base status</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
       <div className="flex justify-end">
