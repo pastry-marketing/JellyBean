@@ -2,13 +2,14 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, MapPin, CalendarRange, ShieldCheck } from "lucide-react";
+import { Loader2, Plus, Trash2, MapPin, CalendarRange, ShieldCheck, Edit3 } from "lucide-react";
 
 import { RouteSkeleton } from "@/components/route-skeleton";
 import { PageHeader, PageBody, RoleGate } from "@/components/page";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -161,7 +162,7 @@ function RoleSection({
         </div>
       </div>
 
-      <AddRuleForm role={role} />
+      <BaseRuleForm role={role} />
 
       {bases.length === 0 ? (
         <div className="glass-card p-6 text-center text-[12.5px] text-muted-foreground">
@@ -195,6 +196,7 @@ function RoleSection({
 function RuleRow({ base }: { base: ServiceAreaBase }) {
   const qc = useQueryClient();
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
   const active = isBaseActive(base);
 
   async function remove() {
@@ -255,7 +257,17 @@ function RuleRow({ base }: { base: ServiceAreaBase }) {
         </span>
       </td>
       <td className="px-3 py-2">
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 px-2"
+            onClick={() => setEditing(true)}
+            disabled={busy}
+            title="Edit rule"
+          >
+            <Edit3 className="h-3.5 w-3.5" />
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -267,24 +279,45 @@ function RuleRow({ base }: { base: ServiceAreaBase }) {
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
         </div>
+        <Dialog open={editing} onOpenChange={setEditing}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit base rule</DialogTitle>
+            </DialogHeader>
+            <BaseRuleForm role={base.role_group} base={base} onDone={() => setEditing(false)} />
+          </DialogContent>
+        </Dialog>
       </td>
     </tr>
   );
 }
 
-function AddRuleForm({ role }: { role: BaseRole }) {
+function BaseRuleForm({
+  role,
+  base,
+  onDone,
+}: {
+  role: BaseRole;
+  base?: ServiceAreaBase;
+  onDone?: () => void;
+}) {
   const auth = useAuth();
   const qc = useQueryClient();
-  const [scope, setScope] = useState<"category" | "service">("service");
-  const [serviceValue, setServiceValue] = useState("");
-  const [categoryValue, setCategoryValue] = useState("");
-  const [stateCode, setStateCode] = useState("");
-  const [city, setCity] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const isEdit = !!base;
+  const [scope, setScope] = useState<"category" | "service">(base?.service_scope ?? "service");
+  const [serviceValue, setServiceValue] = useState(
+    base && base.service_scope === "service" ? base.service_value : "",
+  );
+  const [categoryValue, setCategoryValue] = useState(
+    base && base.service_scope === "category" ? base.service_value : "",
+  );
+  const [stateCode, setStateCode] = useState(base?.state_code ?? "");
+  const [city, setCity] = useState(base?.city ?? "");
+  const [from, setFrom] = useState(base?.active_from ?? "");
+  const [to, setTo] = useState(base?.active_to ?? "");
   const [busy, setBusy] = useState(false);
 
-  async function add() {
+  async function submit() {
     const value = scope === "category" ? categoryValue : serviceValue.trim();
     if (!value) {
       toast.error(scope === "category" ? "Pick a category" : "Pick a service");
@@ -300,7 +333,7 @@ function AddRuleForm({ role }: { role: BaseRole }) {
     }
     setBusy(true);
     try {
-      const { error } = await supabase.from("service_area_bases" as never).insert({
+      const fields = {
         role_group: role,
         service_scope: scope,
         service_value: value,
@@ -308,17 +341,29 @@ function AddRuleForm({ role }: { role: BaseRole }) {
         city: city.trim() || null,
         active_from: from || null,
         active_to: to || null,
-        created_by: auth.user?.id ?? null,
-      } as never);
-      if (error) throw new Error(error.message);
-      toast.success("Base rule added");
-      setServiceValue("");
-      setCategoryValue("");
-      setStateCode("");
-      setCity("");
-      setFrom("");
-      setTo("");
+      };
+      if (isEdit && base) {
+        const { error } = await supabase
+          .from("service_area_bases" as never)
+          .update(fields as never)
+          .eq("id", base.id);
+        if (error) throw new Error(error.message);
+        toast.success("Base rule updated");
+      } else {
+        const { error } = await supabase
+          .from("service_area_bases" as never)
+          .insert({ ...fields, created_by: auth.user?.id ?? null } as never);
+        if (error) throw new Error(error.message);
+        toast.success("Base rule added");
+        setServiceValue("");
+        setCategoryValue("");
+        setStateCode("");
+        setCity("");
+        setFrom("");
+        setTo("");
+      }
       qc.invalidateQueries({ queryKey: ["service-area-bases"] });
+      onDone?.();
     } catch (e) {
       toast.error(friendlyError(e));
     } finally {
@@ -327,7 +372,7 @@ function AddRuleForm({ role }: { role: BaseRole }) {
   }
 
   return (
-    <div className="glass-card p-3.5 space-y-3">
+    <div className={isEdit ? "space-y-3" : "glass-card p-3.5 space-y-3"}>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         <div className="space-y-1.5">
           <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -421,13 +466,15 @@ function AddRuleForm({ role }: { role: BaseRole }) {
         </div>
       </div>
       <div className="flex justify-end">
-        <Button size="sm" onClick={() => void add()} disabled={busy}>
+        <Button size="sm" onClick={() => void submit()} disabled={busy}>
           {busy ? (
             <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          ) : isEdit ? (
+            <Edit3 className="h-3.5 w-3.5 mr-1.5" />
           ) : (
             <Plus className="h-3.5 w-3.5 mr-1.5" />
           )}
-          Add base rule
+          {isEdit ? "Save changes" : "Add base rule"}
         </Button>
       </div>
     </div>
