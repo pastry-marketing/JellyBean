@@ -893,7 +893,9 @@ function Inner() {
     // manual refresh. Polling (not realtime) keeps this off the exceeded
     // Realtime-Messages quota; keepPreviousData avoids flicker and preserves
     // selection, and background refetches pause while the tab is hidden.
-    refetchInterval: 30_000,
+    // Pause auto-refresh while a search/filter is active so we don't re-run the
+    // heavier filtered query on a timer (and don't shift results while reading).
+    refetchInterval: isUnfiltered ? 30_000 : false,
     refetchOnWindowFocus: true,
   });
 
