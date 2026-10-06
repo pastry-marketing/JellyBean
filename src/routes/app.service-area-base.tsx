@@ -60,7 +60,10 @@ function Page() {
 
 function Inner() {
   const basesQuery = useQuery({ queryKey: ["service-area-bases"], queryFn: fetchAllBases });
-  const configQuery = useQuery({ queryKey: ["service-area-base-config"], queryFn: fetchBaseConfig });
+  const configQuery = useQuery({
+    queryKey: ["service-area-base-config"],
+    queryFn: fetchBaseConfig,
+  });
 
   const basesByRole = useMemo(() => {
     const map: Record<BaseRole, ServiceAreaBase[]> = { fb: [], seo: [], nd: [] };
@@ -111,17 +114,15 @@ function RoleSection({
   async function setEnforcement(mode: EnforcementMode) {
     setSavingConfig(true);
     try {
-      const { error } = await supabase
-        .from("service_area_base_config" as never)
-        .upsert(
-          {
-            role_group: role,
-            enforcement_mode: mode,
-            updated_by: auth.user?.id ?? null,
-            updated_at: new Date().toISOString(),
-          } as never,
-          { onConflict: "role_group" },
-        );
+      const { error } = await supabase.from("service_area_base_config" as never).upsert(
+        {
+          role_group: role,
+          enforcement_mode: mode,
+          updated_by: auth.user?.id ?? null,
+          updated_at: new Date().toISOString(),
+        } as never,
+        { onConflict: "role_group" },
+      );
       if (error) throw new Error(error.message);
       toast.success(
         mode === "status"

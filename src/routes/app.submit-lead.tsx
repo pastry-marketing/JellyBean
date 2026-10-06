@@ -781,8 +781,8 @@ function SubmitForm({
           <AlertDialogHeader>
             <AlertDialogTitle>Lead is outside your Service/Area Base</AlertDialogTitle>
             <AlertDialogDescription>
-              This lead's service and area don't match the acceptable base set for your role.
-              You can still add it — it will be tagged <strong>Out of Base</strong>
+              This lead's service and area don't match the acceptable base set for your role. You
+              can still add it — it will be tagged <strong>Out of Base</strong>
               {pendingOob?.mode === "status"
                 ? " and moved to the Out of Base status for review"
                 : ""}

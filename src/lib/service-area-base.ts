@@ -64,7 +64,8 @@ export function isLeadInBase(params: {
   if (active.length === 0) return true; // no active base → no restriction
 
   const svc = (params.service ?? "").trim().toLowerCase();
-  const category = (params.service ? findServiceCategory(params.service) : null)?.toLowerCase() ?? null;
+  const category =
+    (params.service ? findServiceCategory(params.service) : null)?.toLowerCase() ?? null;
   const st = (params.stateCode ?? "").trim().toUpperCase();
   const cty = (params.city ?? "").trim().toLowerCase();
 
