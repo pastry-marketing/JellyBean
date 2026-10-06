@@ -35,6 +35,14 @@ import {
 } from "@/components/duplicate-lead-dialog";
 import { useSignedLeadUrls } from "@/lib/lead-attachments";
 import { ServiceCombobox } from "@/components/service-combobox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { US_STATES } from "@/lib/us-states";
 const MAX_IMAGES = 20;
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -57,6 +65,7 @@ export type LeadFormValues = {
   customerName: string;
   customerNumber: string;
   area: string;
+  stateCode: string;
   service: string;
   context: string;
   exactCustomerText: string;
@@ -73,6 +82,7 @@ type LeadFormInitialValues = {
   customerName?: string;
   customerNumber?: string;
   area?: string;
+  stateCode?: string;
   service?: string;
   context?: string;
   exactCustomerText?: string;
@@ -91,6 +101,8 @@ export function LeadForm({
   forwardedBy,
   showAttachments,
   areaRequired,
+  showState = false,
+  stateRequired = false,
   referenceMode,
   initialValues,
   submitting,
@@ -106,6 +118,8 @@ export function LeadForm({
   forwardedBy: string;
   showAttachments: boolean;
   areaRequired: boolean;
+  showState?: boolean;
+  stateRequired?: boolean;
   referenceMode: LeadReferenceMode;
   initialValues?: LeadFormInitialValues;
   submitting?: boolean;
@@ -125,6 +139,7 @@ export function LeadForm({
   const [customerNumber, setCustomerNumber] = useState(initialValues?.customerNumber ?? "");
   const [extraNumbers, setExtraNumbers] = useState<string[]>(initialValues?.extraNumbers ?? []);
   const [area, setArea] = useState(initialValues?.area ?? "");
+  const [stateCode, setStateCode] = useState(initialValues?.stateCode ?? "");
   const [service, setService] = useState(initialValues?.service ?? "");
   const [context, setContext] = useState(initialValues?.context ?? "");
   const [exactCustomerText, setExactCustomerText] = useState(
@@ -160,6 +175,7 @@ export function LeadForm({
     customerName: string;
     customerNumber: string;
     area: string;
+    stateCode: string;
     service: string;
     context: string;
     exactCustomerText: string;
@@ -174,6 +190,7 @@ export function LeadForm({
     customerName: initialValues?.customerName ?? "",
     customerNumber: initialValues?.customerNumber ?? "",
     area: initialValues?.area ?? "",
+    stateCode: initialValues?.stateCode ?? "",
     service: initialValues?.service ?? "",
     context: initialValues?.context ?? "",
     exactCustomerText: initialValues?.exactCustomerText ?? "",
@@ -252,6 +269,7 @@ export function LeadForm({
     customerName !== baseline.customerName ||
     customerNumber !== baseline.customerNumber ||
     area !== baseline.area ||
+    stateCode !== baseline.stateCode ||
     service !== baseline.service ||
     context !== baseline.context ||
     exactCustomerText !== baseline.exactCustomerText ||
@@ -488,6 +506,10 @@ export function LeadForm({
       toast.error("Area is required");
       return;
     }
+    if (stateRequired && !stateCode.trim()) {
+      toast.error("State is required");
+      return;
+    }
     if (!service.trim()) {
       toast.error("Service is required");
       return;
@@ -510,6 +532,7 @@ export function LeadForm({
       customerName: customerName.trim(),
       customerNumber: customerNumber.trim(),
       area: area.trim(),
+      stateCode: stateCode.trim(),
       service: service.trim(),
       context: context.trim(),
       exactCustomerText: exactCustomerText.trim(),
@@ -600,6 +623,7 @@ export function LeadForm({
       customerName: customerName.trim(),
       customerNumber: customerNumber.trim(),
       area: area.trim(),
+      stateCode: stateCode.trim(),
       service: service.trim(),
       context: context.trim(),
       exactCustomerText: exactCustomerText.trim(),
@@ -621,6 +645,7 @@ export function LeadForm({
         customerName: payload.customerName,
         customerNumber: payload.customerNumber,
         area: payload.area,
+        stateCode: payload.stateCode,
         service: payload.service,
         context: payload.context,
         exactCustomerText: payload.exactCustomerText,
@@ -666,9 +691,25 @@ export function LeadForm({
             value={area}
             onChange={(e) => setArea(e.target.value)}
             maxLength={160}
-            placeholder={areaRequired ? "Required area" : "Optional area"}
+            placeholder={areaRequired ? "Required area (city/neighborhood)" : "Optional area"}
           />
         </Field>
+        {showState && (
+          <Field label="State" required={stateRequired} htmlFor="lead-state">
+            <Select value={stateCode || undefined} onValueChange={setStateCode}>
+              <SelectTrigger id="lead-state">
+                <SelectValue placeholder="Select state" />
+              </SelectTrigger>
+              <SelectContent>
+                {US_STATES.map((s) => (
+                  <SelectItem key={s.code} value={s.code}>
+                    {s.name} ({s.code})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        )}
         <Field label="Service" required htmlFor="lead-service">
           <ServiceCombobox
             id="lead-service"

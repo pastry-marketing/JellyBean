@@ -39,6 +39,24 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { LeadForm, type LeadFormValues, type LeadReferenceMode } from "@/components/lead-form";
 import { uploadLeadImages } from "@/lib/lead-form-utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  roleToBaseGroup,
+  fetchBasesForRole,
+  fetchBaseConfig,
+  isLeadInBase,
+  enforcementFor,
+  type EnforcementMode,
+} from "@/lib/service-area-base";
 import { SignedLeadImage } from "@/lib/lead-attachments.tsx";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -543,6 +561,11 @@ function SubmitForm({
   const autoRephraseFn = useServerFn(autoRephraseLeadWithAi);
   const [submitting, setSubmitting] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(initialDraft?.id ?? null);
+  const baseGroup = roleToBaseGroup(role);
+  const [pendingOob, setPendingOob] = useState<{
+    values: LeadFormValues;
+    mode: EnforcementMode;
+  } | null>(null);
   const referenceMode: LeadReferenceMode =
     role === "facebook" ? "auto-fb" : role === "seo" ? "manual-text" : "manual-dropdown";
   const forwardedBy =
@@ -555,6 +578,7 @@ function SubmitForm({
         customerNumber: (draftFd.customerNumber as string) ?? "",
         extraNumbers: (draftFd.extraNumbers as string[]) ?? [],
         area: (draftFd.area as string) ?? "",
+        stateCode: (draftFd.stateCode as string) ?? "",
         service: (draftFd.service as string) ?? "",
         context: (draftFd.context as string) ?? "",
         exactCustomerText: (draftFd.exactCustomerText as string) ?? "",
@@ -577,6 +601,7 @@ function SubmitForm({
           customerNumber: values.customerNumber,
           extraNumbers: values.extraNumbers,
           area: values.area,
+          stateCode: values.stateCode,
           service: values.service,
           context: values.context,
           exactCustomerText: values.exactCustomerText,
@@ -593,7 +618,7 @@ function SubmitForm({
     }
   }
 
-  async function submit(values: LeadFormValues) {
+  async function doInsert(values: LeadFormValues, outOfBase: boolean, mode: EnforcementMode) {
     if (!auth.user?.id) return;
     setSubmitting(true);
     try {
@@ -605,29 +630,36 @@ function SubmitForm({
         .map((p) => p.trim())
         .filter((p) => p.length > 0)
         .map((p) => formatPhone(p) || p);
+      // Only reference the out_of_base column when a lead is actually out of
+      // base. Out-of-base can only happen once base rules exist (which requires
+      // this feature's migration), so the common in-base path stays compatible
+      // even if the frontend deploys slightly ahead of the migration.
+      const insertPayload: Record<string, unknown> = {
+        customer_name: values.customerName,
+        customer_number: values.customerNumber,
+        customer_number_2: cleanedExtras[0] ?? null,
+        extra_numbers: cleanedExtras,
+        service: values.service,
+        pass_it_to: role === "facebook" || role === "seo" ? null : values.service,
+        main_area: values.area || null,
+        sub_area: values.area || null,
+        context: values.context,
+        post_text: values.exactCustomerText,
+        reference: values.reference,
+        images: imageUrls,
+        submitted_by_role: role,
+        is_important: values.isImportant,
+        pinned_important: values.isImportant,
+        created_by: auth.user.id,
+        assigned_by: auth.user.id,
+        cs_status: outOfBase && mode === "status" ? "out_of_base" : "new",
+        state_code: values.stateCode || null,
+        is_landline: values.isLandline,
+      };
+      if (outOfBase) insertPayload.out_of_base = true;
       const { data: insertedLead, error } = await supabase
         .from("qualified_leads")
-        .insert({
-          customer_name: values.customerName,
-          customer_number: values.customerNumber,
-          customer_number_2: cleanedExtras[0] ?? null,
-          extra_numbers: cleanedExtras,
-          service: values.service,
-          pass_it_to: role === "facebook" || role === "seo" ? null : values.service,
-          main_area: values.area || null,
-          sub_area: values.area || null,
-          context: values.context,
-          post_text: values.exactCustomerText,
-          reference: values.reference,
-          images: imageUrls,
-          submitted_by_role: role,
-          is_important: values.isImportant,
-          pinned_important: values.isImportant,
-          created_by: auth.user.id,
-          assigned_by: auth.user.id,
-          cs_status: "new",
-          is_landline: values.isLandline,
-        } as never)
+        .insert(insertPayload as never)
         .select("id")
         .maybeSingle();
       if (error) throw error;
@@ -685,20 +717,95 @@ function SubmitForm({
     }
   }
 
+  // Entry point from the form. For FB / SEO / ND submitters, check the lead
+  // against the active Service/Area Base first. Out-of-base leads trigger a
+  // warning (but can still be added); everything else inserts immediately.
+  async function submit(values: LeadFormValues) {
+    if (!auth.user?.id) return;
+    if (baseGroup) {
+      setSubmitting(true);
+      let inBase = true;
+      let mode: EnforcementMode = "warn";
+      try {
+        const [bases, configs] = await Promise.all([
+          fetchBasesForRole(baseGroup),
+          fetchBaseConfig(),
+        ]);
+        inBase = isLeadInBase({
+          bases,
+          service: values.service,
+          stateCode: values.stateCode,
+          city: values.area,
+        });
+        mode = enforcementFor(configs, baseGroup);
+      } catch (err) {
+        // If the base check fails, don't block the submission — treat as in-base.
+        console.error("[ServiceAreaBase] check failed:", err);
+        inBase = true;
+      } finally {
+        setSubmitting(false);
+      }
+      if (!inBase) {
+        setPendingOob({ values, mode });
+        return;
+      }
+    }
+    await doInsert(values, false, "warn");
+  }
+
   return (
-    <LeadForm
-      title="Send a new lead to CS"
-      submitLabel="Send to CS"
-      forwardedBy={forwardedBy}
-      showAttachments
-      areaRequired={role !== "seo"}
-      referenceMode={referenceMode}
-      submitting={submitting}
-      onDirtyChange={onDirtyChange}
-      onCancel={onDone}
-      onSubmit={submit}
-      onSaveDraft={handleSaveDraft}
-      initialValues={initialValues}
-    />
+    <>
+      <LeadForm
+        title="Send a new lead to CS"
+        submitLabel="Send to CS"
+        forwardedBy={forwardedBy}
+        showAttachments
+        areaRequired={role !== "seo"}
+        showState
+        stateRequired={baseGroup !== null}
+        referenceMode={referenceMode}
+        submitting={submitting}
+        onDirtyChange={onDirtyChange}
+        onCancel={onDone}
+        onSubmit={submit}
+        onSaveDraft={handleSaveDraft}
+        initialValues={initialValues}
+      />
+      <AlertDialog
+        open={!!pendingOob}
+        onOpenChange={(open) => {
+          if (!open) setPendingOob(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Lead is outside your Service/Area Base</AlertDialogTitle>
+            <AlertDialogDescription>
+              This lead's service and area don't match the acceptable base set for your role.
+              You can still add it — it will be tagged <strong>Out of Base</strong>
+              {pendingOob?.mode === "status"
+                ? " and moved to the Out of Base status for review"
+                : ""}
+              . Add it anyway?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={submitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={submitting}
+              onClick={(e) => {
+                e.preventDefault();
+                if (!pendingOob) return;
+                const { values, mode } = pendingOob;
+                setPendingOob(null);
+                void doInsert(values, true, mode);
+              }}
+            >
+              Add anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

@@ -246,6 +246,7 @@ type Lead = {
   assigned_by: string | null;
   reference: string | null;
   is_landline: boolean;
+  out_of_base: boolean;
 };
 
 // CS pipeline statuses surfaced in the UI (subset of the DB enum).
@@ -727,7 +728,7 @@ function Inner() {
       let q = supabase
         .from("qualified_leads")
         .select(
-          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline",
+          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline, out_of_base",
         )
         .order("pinned_important", { ascending: false })
         .order("assigned_at", { ascending: false })
@@ -795,7 +796,7 @@ function Inner() {
       const { data, error } = await supabase
         .from("qualified_leads")
         .select(
-          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline",
+          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline, out_of_base",
         )
         .eq("id", deepLinkLeadId)
         .maybeSingle();
@@ -2153,6 +2154,11 @@ function CsLeadsTable({
                         />
                       ))}
                     <span>{lead.customer_name}</span>
+                    {lead.out_of_base && (
+                      <span className="inline-flex items-center rounded-full bg-[#fde8d5] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b4530a] ring-1 ring-[#f4c79a]">
+                        Out of Base
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
@@ -2535,6 +2541,11 @@ function LeadCard({
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
+            {lead.out_of_base && (
+              <span className="inline-flex items-center rounded-full bg-[#fde8d5] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b4530a] ring-1 ring-[#f4c79a]">
+                Out of Base
+              </span>
+            )}
             <PhoneCopyLink phone={lead.customer_number} compact />
             {lead.is_landline && (
               <span className="inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-300">
