@@ -758,7 +758,7 @@ function SubmitForm({
         showAttachments
         areaRequired={role !== "seo"}
         showState
-        stateRequired={baseGroup !== null}
+        stateRequired={baseGroup !== null && baseGroup !== "seo"}
         referenceMode={referenceMode}
         submitting={submitting}
         onDirtyChange={onDirtyChange}
