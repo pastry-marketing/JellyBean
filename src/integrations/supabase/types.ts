@@ -1596,6 +1596,9 @@ export type Database = {
         | "small_service"
         | "already_received_before"
         | "out_of_base"
+        | "cx_interested"
+        | "cx_not_interested"
+        | "cx_didnt_replied"
       raw_lead_cancel_reason:
         | "not_a_lead"
         | "general_post"
@@ -1765,6 +1768,9 @@ export const Constants = {
         "small_service",
         "already_received_before",
         "out_of_base",
+        "cx_interested",
+        "cx_not_interested",
+        "cx_didnt_replied",
       ],
       raw_lead_cancel_reason: [
         "not_a_lead",
