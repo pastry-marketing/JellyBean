@@ -71,6 +71,9 @@ const CS_STATUSES = [
   "service_provider_himself",
   "small_service",
   "converted",
+  "cx_interested",
+  "cx_not_interested",
+  "cx_didnt_replied",
   "need_follow_up",
 ] as const satisfies readonly CsStatus[];
 
@@ -82,7 +85,10 @@ const CS_LABELS: Record<string, string> = {
   already_got_someone: "Already got someone",
   service_provider_himself: "Service provider himself",
   small_service: "Small service",
-  converted: "Processed",
+  converted: "Delivered",
+  cx_interested: "CX interested",
+  cx_not_interested: "CX not interested",
+  cx_didnt_replied: "CX didn't replied",
   need_follow_up: "Need follow-up",
 };
 

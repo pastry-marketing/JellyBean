@@ -263,6 +263,9 @@ const PIPELINE_STATUSES = [
   "service_provider_himself",
   "small_service",
   "converted",
+  "cx_interested",
+  "cx_not_interested",
+  "cx_didnt_replied",
   "need_follow_up",
 ] as const satisfies readonly CsStatus[];
 
@@ -2914,6 +2917,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function statusDotTone(status: string) {
+  if (status === "cx_interested") return "bg-success";
+  if (status === "cx_not_interested") return "bg-destructive";
+  if (status === "cx_didnt_replied") return "bg-warning";
   if (status === "converted" || status === "closed_won") return "bg-success";
   if (
     status === "need_follow_up" ||

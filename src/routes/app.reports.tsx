@@ -87,6 +87,9 @@ export const CS_STATUSES = [
   "service_provider_himself",
   "small_service",
   "converted",
+  "cx_interested",
+  "cx_not_interested",
+  "cx_didnt_replied",
   "need_follow_up",
 ] as const;
 
@@ -111,7 +114,10 @@ const CS_LABELS: Record<string, string> = {
   already_received_before: "Already received before",
   service_provider_himself: "Service Provider Himself",
   small_service: "Small Service",
-  converted: "Processed",
+  converted: "Delivered",
+  cx_interested: "CX interested",
+  cx_not_interested: "CX not interested",
+  cx_didnt_replied: "CX didn't replied",
   need_follow_up: "Need Follow Up",
 };
 
@@ -124,6 +130,9 @@ const RAW_COLORS: Record<string, string> = {
 };
 
 const CS_STATUS_COLORS: Record<string, string> = {
+  cx_interested: "var(--success)",
+  cx_not_interested: "var(--destructive)",
+  cx_didnt_replied: "var(--warning)",
   new: "#38bdf8",
   converted: "#4ade80",
   need_follow_up: "#60a5fa",
@@ -139,6 +148,9 @@ const CS_STATUS_COLORS: Record<string, string> = {
 };
 
 function statusDotTone(status: string) {
+  if (status === "cx_interested") return "bg-success";
+  if (status === "cx_not_interested") return "bg-destructive";
+  if (status === "cx_didnt_replied") return "bg-warning";
   if (status === "converted" || status === "closed_won") return "bg-emerald-500";
   if (
     status === "need_follow_up" ||
@@ -1094,7 +1106,7 @@ function UserForwardedRow({
             <div className="h-2 w-full rounded-full bg-muted/60 overflow-hidden flex shadow-inner">
               {processedCount > 0 && (
                 <div
-                  title={`Processed: ${processedCount} (${processedPct}%)`}
+                  title={`Delivered: ${processedCount} (${processedPct}%)`}
                   style={{ width: `${(processedCount / total) * 100}%` }}
                   className="h-full bg-emerald-500 transition-all duration-300"
                 />
@@ -1127,7 +1139,7 @@ function UserForwardedRow({
               {processedCount > 0 && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                  Processed:{" "}
+                   Delivered:{" "}
                   <strong className="tabular-nums">{processedCount.toLocaleString()}</strong>
                 </span>
               )}
@@ -1206,7 +1218,7 @@ function UserForwardedRow({
                   </div>
                   <div className="h-3 w-px bg-border hidden sm:block" />
                   <div>
-                    <span className="text-muted-foreground">Processed Rate: </span>
+                    <span className="text-muted-foreground">Delivered Rate: </span>
                     <strong className="font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
                       {processedPct}%
                     </strong>
