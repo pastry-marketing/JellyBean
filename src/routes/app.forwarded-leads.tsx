@@ -50,6 +50,14 @@ import { confirmDiscardUnsaved } from "@/components/confirm-dialog-store";
 import { LeadReminderDialog, type ReminderLeadInfo } from "@/components/lead-reminder-dialog";
 
 export const Route = createFileRoute("/app/forwarded-leads")({
+  head: () => ({ meta: [
+    { title: "Forwarded Leads \u00b7 JellyBean" },
+    { name: "description", content: "Track your forwarded leads and their customer outcomes." },
+    { property: "og:title", content: "Forwarded Leads \u00b7 JellyBean" },
+    { property: "og:description", content: "Track your forwarded leads and their customer outcomes." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,

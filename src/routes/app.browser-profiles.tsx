@@ -43,7 +43,15 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-export const Route = createFileRoute("/app/browser-profiles")({ component: Page });
+export const Route = createFileRoute("/app/browser-profiles")({
+  head: () => ({ meta: [
+    { title: "Browser Profiles \u00b7 JellyBean" },
+    { name: "description", content: "Manage browser profiles for JellyBean account operations." },
+    { property: "og:title", content: "Browser Profiles \u00b7 JellyBean" },
+    { property: "og:description", content: "Manage browser profiles for JellyBean account operations." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }), component: Page });
 
 type LaunchHistoryEntry = { at: string; by: string | null };
 type IncognitonProfileInsert = Database["public"]["Tables"]["incogniton_profiles"]["Insert"];
