@@ -13,7 +13,15 @@ import type { PlacedAccount } from "@/components/leaflet-map";
 import { pktDayKey, pktTodayKey } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/app/map")({ component: Page });
+export const Route = createFileRoute("/app/map")({
+  head: () => ({ meta: [
+    { title: "Coverage Map \u00b7 JellyBean" },
+    { name: "description", content: "Review account coverage and browser profile activity." },
+    { property: "og:title", content: "Coverage Map \u00b7 JellyBean" },
+    { property: "og:description", content: "Review account coverage and browser profile activity." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }), component: Page });
 
 type LaunchHistoryEntry = { at: string; by?: string | null };
 

@@ -164,6 +164,10 @@ function formatStatus(rawStatus) {
   if (!rawStatus) return "New to contact";
   const s = String(rawStatus).trim().toLowerCase();
   if (s === "new" || s === "new to contact") return "New to contact";
+  if (s === "converted" || s === "processed" || s === "delivered") return "Delivered";
+  if (s === "cx_interested") return "CX interested";
+  if (s === "cx_not_interested") return "CX not interested";
+  if (s === "cx_didnt_replied") return "CX didn't replied";
   if (s === "contacted") return "Contacted";
   if (s === "followup" || s === "follow_up" || s === "follow up") return "Follow Up";
   if (s === "quoted") return "Quoted";

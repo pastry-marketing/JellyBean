@@ -69,6 +69,14 @@ function computeRange(preset: DatePreset, from: string, to: string) {
 }
 
 export const Route = createFileRoute("/app/reports")({
+  head: () => ({ meta: [
+    { title: "Reports \u00b7 JellyBean" },
+    { name: "description", content: "Review lead delivery outcomes and team reports." },
+    { property: "og:title", content: "Reports \u00b7 JellyBean" },
+    { property: "og:description", content: "Review lead delivery outcomes and team reports." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,

@@ -146,6 +146,14 @@ Forbidden Phrases (do not use in any field):
 - "arrange a visit"`;
 
 export const Route = createFileRoute("/app/cs-leads")({
+  head: () => ({ meta: [
+    { title: "CS Pipeline \u00b7 JellyBean" },
+    { name: "description", content: "Manage customer leads, delivery outcomes, and follow-ups in JellyBean." },
+    { property: "og:title", content: "CS Pipeline \u00b7 JellyBean" },
+    { property: "og:description", content: "Manage customer leads, delivery outcomes, and follow-ups in JellyBean." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,

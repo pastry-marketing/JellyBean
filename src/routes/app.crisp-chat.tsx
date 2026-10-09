@@ -67,6 +67,14 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/page";
 
 export const Route = createFileRoute("/app/crisp-chat")({
+  head: () => ({ meta: [
+    { title: "Crisp Chat \u00b7 JellyBean" },
+    { name: "description", content: "Manage customer conversations across connected Crisp workspaces." },
+    { property: "og:title", content: "Crisp Chat \u00b7 JellyBean" },
+    { property: "og:description", content: "Manage customer conversations across connected Crisp workspaces." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: CrispChatPage,
 });
 

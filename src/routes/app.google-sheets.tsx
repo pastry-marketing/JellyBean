@@ -164,6 +164,10 @@ function formatStatus(rawStatus) {
   if (!rawStatus) return "New to contact";
   const s = String(rawStatus).trim().toLowerCase();
   if (s === "new" || s === "new to contact") return "New to contact";
+  if (s === "converted" || s === "processed" || s === "delivered") return "Delivered";
+  if (s === "cx_interested") return "CX interested";
+  if (s === "cx_not_interested") return "CX not interested";
+  if (s === "cx_didnt_replied") return "CX didn't replied";
   if (s === "contacted") return "Contacted";
   if (s === "followup" || s === "follow_up" || s === "follow up") return "Follow Up";
   if (s === "quoted") return "Quoted";
@@ -532,7 +536,15 @@ function jsonResponse(data, code) {
   return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
 };`;
 
-export const Route = createFileRoute("/app/google-sheets")({ component: Page });
+export const Route = createFileRoute("/app/google-sheets")({
+  head: () => ({ meta: [
+    { title: "Google Sheets \u00b7 JellyBean" },
+    { name: "description", content: "Manage the JellyBean lead synchronization with Google Sheets." },
+    { property: "og:title", content: "Google Sheets \u00b7 JellyBean" },
+    { property: "og:description", content: "Manage the JellyBean lead synchronization with Google Sheets." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }), component: Page });
 
 function Page() {
   const auth = useAuth();
