@@ -1,0 +1,1 @@
+ALTER POLICY "settings: auth read" ON public.app_settings USING (public.current_user_has_role('admin'::public.app_role));
