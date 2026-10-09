@@ -600,7 +600,7 @@ function AnalyticsTab() {
                 <TableHead>CS User</TableHead>
                 <TableHead>Assigned States</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Processed</TableHead>
+                <TableHead className="text-right">Delivered</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
                 <TableHead>Leads by State</TableHead>
                 <TableHead>Leads by Status</TableHead>

@@ -91,6 +91,9 @@ const OUTCOME_FILTERS = [
   "service_provider_himself",
   "small_service",
   "converted",
+  "cx_interested",
+  "cx_not_interested",
+  "cx_didnt_replied",
   "need_follow_up",
 ] as const;
 
@@ -772,7 +775,7 @@ function ForwardedTable({
                     disabled={r.cs_status === "converted"}
                     title={
                       r.cs_status === "converted"
-                        ? "Processed leads can't receive reminders"
+                        ? "Delivered leads can't receive reminders"
                         : r.assigned_to
                           ? "Send reminder to assigned CS"
                           : "Send reminder to all CS users"
