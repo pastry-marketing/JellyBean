@@ -1,5 +1,20 @@
 -- Connect forwarded leads to their scraped source row so profile performance
 -- remains accurate even if a lead's status or service changes later.
+-- Keep this migration self-contained for environments where it is applied
+-- directly instead of through the full ordered migration set.
+ALTER TABLE public.incogniton_profiles
+  ADD COLUMN IF NOT EXISTS profile_priority text NOT NULL DEFAULT 'none';
+
+ALTER TABLE public.incogniton_profiles
+  DROP CONSTRAINT IF EXISTS incogniton_profiles_profile_priority_check;
+
+ALTER TABLE public.incogniton_profiles
+  ADD CONSTRAINT incogniton_profiles_profile_priority_check
+  CHECK (profile_priority IN ('none', 'first', 'second'));
+
+CREATE INDEX IF NOT EXISTS idx_incogniton_profiles_priority
+  ON public.incogniton_profiles (profile_priority);
+
 ALTER TABLE public.qualified_leads
   ADD COLUMN IF NOT EXISTS raw_lead_cache_id uuid
   REFERENCES public.raw_lead_cache(id) ON DELETE SET NULL;
