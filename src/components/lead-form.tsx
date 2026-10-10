@@ -35,6 +35,7 @@ import {
 } from "@/components/duplicate-lead-dialog";
 import { useSignedLeadUrls } from "@/lib/lead-attachments";
 import { ServiceCombobox } from "@/components/service-combobox";
+import { StateCombobox } from "@/components/state-combobox";
 import {
   Select,
   SelectContent,
@@ -42,7 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { US_STATES } from "@/lib/us-states";
+import { extractUsStateCodeFromArea } from "@/lib/us-states";
 const MAX_IMAGES = 20;
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -166,6 +167,26 @@ export function LeadForm({
   const pendingSubmitValuesRef = useRef<LeadFormValues | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [markingNotFound, setMarkingNotFound] = useState(false);
+  const autoDetectedStateRef = useRef<string | null>(null);
+
+  function handleAreaChange(nextArea: string) {
+    setArea(nextArea);
+    if (!showState) return;
+
+    const detectedState = extractUsStateCodeFromArea(nextArea);
+    if (detectedState) {
+      autoDetectedStateRef.current = detectedState;
+      setStateCode(detectedState);
+    } else if (autoDetectedStateRef.current === stateCode) {
+      autoDetectedStateRef.current = null;
+      setStateCode("");
+    }
+  }
+
+  function handleStateChange(nextStateCode: string) {
+    autoDetectedStateRef.current = null;
+    setStateCode(nextStateCode);
+  }
 
   // Baseline snapshot representing the last "clean" state (initial values, or
   // the values that were just persisted via Save Draft). isDirty compares
@@ -689,25 +710,21 @@ export function LeadForm({
         <Field label="Area" required={areaRequired}>
           <Input
             value={area}
-            onChange={(e) => setArea(e.target.value)}
+            onChange={(e) => handleAreaChange(e.target.value)}
             maxLength={160}
-            placeholder={areaRequired ? "Required area (city/neighborhood)" : "Optional area"}
+            placeholder={
+              areaRequired ? "City or neighborhood, state (e.g. Austin, TX)" : "Optional area"
+            }
           />
         </Field>
         {showState && (
           <Field label="State" required={stateRequired} htmlFor="lead-state">
-            <Select value={stateCode || undefined} onValueChange={setStateCode}>
-              <SelectTrigger id="lead-state">
-                <SelectValue placeholder="Select state" />
-              </SelectTrigger>
-              <SelectContent>
-                {US_STATES.map((s) => (
-                  <SelectItem key={s.code} value={s.code}>
-                    {s.name} ({s.code})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <StateCombobox
+              id="lead-state"
+              value={stateCode}
+              onChange={handleStateChange}
+              required={stateRequired}
+            />
           </Field>
         )}
         <Field label="Service" required htmlFor="lead-service">

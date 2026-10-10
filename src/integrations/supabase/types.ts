@@ -428,6 +428,7 @@ export type Database = {
           longitude: number | null
           notes: string | null
           platform: string | null
+          profile_priority: string
           profile_name: string
         }
         Insert: {
@@ -447,6 +448,7 @@ export type Database = {
           longitude?: number | null
           notes?: string | null
           platform?: string | null
+          profile_priority?: string
           profile_name: string
         }
         Update: {
@@ -466,6 +468,7 @@ export type Database = {
           longitude?: number | null
           notes?: string | null
           platform?: string | null
+          profile_priority?: string
           profile_name?: string
         }
         Relationships: [
@@ -667,6 +670,7 @@ export type Database = {
           pinned_important: boolean
           post_text: string | null
           raw_lead_id: string | null
+          raw_lead_cache_id: string | null
           reference: string | null
           requirement_1: string | null
           requirement_2: string | null
@@ -707,6 +711,7 @@ export type Database = {
           pinned_important?: boolean
           post_text?: string | null
           raw_lead_id?: string | null
+          raw_lead_cache_id?: string | null
           reference?: string | null
           requirement_1?: string | null
           requirement_2?: string | null
@@ -747,6 +752,7 @@ export type Database = {
           pinned_important?: boolean
           post_text?: string | null
           raw_lead_id?: string | null
+          raw_lead_cache_id?: string | null
           reference?: string | null
           requirement_1?: string | null
           requirement_2?: string | null
@@ -757,6 +763,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "qualified_leads_raw_lead_cache_id_fkey"
+            columns: ["raw_lead_cache_id"]
+            isOneToOne: false
+            referencedRelation: "raw_lead_cache"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "qualified_leads_raw_lead_id_fkey"
             columns: ["raw_lead_id"]
@@ -1131,6 +1144,22 @@ export type Database = {
       acknowledge_lead_reminders: {
         Args: { _lead_id: string }
         Returns: number
+      }
+      browser_profile_performance: {
+        Args: { _from: string; _to: string }
+        Returns: {
+          account_area: string | null
+          cx_interested: number
+          delivered: number
+          forwarded: number
+          incogniton_profile_id: string
+          launch_count: number
+          profile_id: string
+          profile_name: string
+          profile_priority: string
+          scraped_posts: number
+          top_service: string | null
+        }[]
       }
       adjust_raw_lead_cache_count: {
         Args: { _assigned_to: string; _category_key: string; _delta: number }

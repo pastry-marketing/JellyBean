@@ -23,12 +23,13 @@ export type PlacedAccount = {
   today_launch_count: number;
   notes: string | null;
   is_active: boolean;
+  profile_priority: "none" | "first" | "second";
 };
 
 interface Props {
   placed: PlacedAccount[];
   visuals: boolean;
-  radiusMode: "daily" | "all" | "inactive" | "inactive_daily";
+  radiusMode: "first_daily" | "second_daily" | "all" | "inactive" | "inactive_daily";
   tempPin?: { lat: number; lng: number } | null;
   onMapClick?: (lat: number, lng: number) => void;
 }
@@ -48,7 +49,16 @@ export default function LeafletMap({ placed, visuals, radiusMode, tempPin, onMap
   const items: React.ReactNode[] = [];
 
   for (const account of placed) {
-    if (radiusMode === "daily" && !account.launched_today) continue;
+    if (
+      radiusMode === "first_daily" &&
+      (!account.launched_today || account.profile_priority !== "first")
+    )
+      continue;
+    if (
+      radiusMode === "second_daily" &&
+      (!account.launched_today || account.profile_priority !== "second")
+    )
+      continue;
     if (radiusMode === "inactive" && account.is_active) continue;
     if (radiusMode === "inactive_daily" && (account.is_active || !account.launched_today)) continue;
 
@@ -140,6 +150,16 @@ function CoveragePopup({ account }: { account: PlacedAccount }) {
         <div>
           <div className="text-muted-foreground">Launch count</div>
           <div className="font-medium tabular-nums">{account.today_launch_count}</div>
+        </div>
+      </div>
+      <div className="mt-2 text-[11px]">
+        <div className="text-muted-foreground">Priority</div>
+        <div className="font-medium">
+          {account.profile_priority === "first"
+            ? "1st Priority"
+            : account.profile_priority === "second"
+              ? "2nd Priority"
+              : "No priority"}
         </div>
       </div>
       <div className="mt-2 text-[11px]">

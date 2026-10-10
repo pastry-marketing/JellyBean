@@ -110,14 +110,16 @@ import { formatCsPipelineShortDate } from "@/lib/cs-pipeline-time";
 import { type RawLeadCursor } from "@/lib/raw-leads-keyset";
 
 export const Route = createFileRoute("/app/raw-leads")({
-  head: () => ({ meta: [
-    { title: "Raw Leads \u00b7 JellyBean" },
-    { name: "description", content: "Review and qualify incoming leads in JellyBean." },
-    { property: "og:title", content: "Raw Leads \u00b7 JellyBean" },
-    { property: "og:description", content: "Review and qualify incoming leads in JellyBean." },
-    { property: "og:type", content: "website" },
-    { name: "twitter:card", content: "summary" },
-  ] }),
+  head: () => ({
+    meta: [
+      { title: "Raw Leads \u00b7 JellyBean" },
+      { name: "description", content: "Review and qualify incoming leads in JellyBean." },
+      { property: "og:title", content: "Raw Leads \u00b7 JellyBean" },
+      { property: "og:description", content: "Review and qualify incoming leads in JellyBean." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,
@@ -2731,6 +2733,7 @@ function QualifyDialog({
           original_lead_link: row["Lead Link"] || null,
           canonical_post_id: extractNextdoorPostId(row["Lead Link"]),
           canonical_lead_link: canonicalizeLeadLink(row["Lead Link"]),
+          raw_lead_cache_id: entry.id,
           assigned_by: actorId,
           created_by: actorId,
           cs_status: "new",
