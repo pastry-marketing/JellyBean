@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import ExcelJS from "exceljs";
 import { downloadCsv } from "@/lib/crm-lite";
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader, PageBody, RoleGate } from "@/components/page";
@@ -34,6 +33,7 @@ import {
   CalendarCheck,
   CalendarRange,
   Pencil,
+  RefreshCw,
   Star,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -244,6 +244,7 @@ function Inner() {
       return (data ?? []) as unknown as Profile[];
     },
     placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 
   const groups = useMemo(
@@ -255,6 +256,7 @@ function Inner() {
   );
 
   const filtered = useMemo(() => {
+    if (profileView === "performance") return [];
     const q = query.trim().toLowerCase();
     const list = (profiles.data ?? []).filter((p) => {
       if (addedDateFilter && dateKey(p.created_at) !== addedDateFilter) return false;
@@ -275,13 +277,13 @@ function Inner() {
 
   const profileCounts = useMemo(() => {
     const all = profiles.data ?? [];
-    return {
-      all: all.length,
-      first: all.filter((profile) => profile.profile_priority === "first").length,
-      second: all.filter((profile) => profile.profile_priority === "second").length,
-      launchedToday: all.filter((profile) => pktDayKey(profile.last_launched_at) === todayKey)
-        .length,
-    };
+    const counts = { all: all.length, first: 0, second: 0, launchedToday: 0 };
+    for (const profile of all) {
+      if (profile.profile_priority === "first") counts.first += 1;
+      if (profile.profile_priority === "second") counts.second += 1;
+      if (pktDayKey(profile.last_launched_at) === todayKey) counts.launchedToday += 1;
+    }
+    return counts;
   }, [profiles.data, todayKey]);
 
   const toggleProfileSort = (key: ProfileSortKey) => {
@@ -1087,6 +1089,9 @@ function ProfilePerformance({ todayKey: today }: { todayKey: string }) {
       return (data ?? []) as ProfilePerformanceRow[];
     },
     placeholderData: keepPreviousData,
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
+    refetchOnWindowFocus: false,
   });
 
   const rows = useMemo(() => report.data ?? [], [report.data]);
@@ -1135,6 +1140,18 @@ function ProfilePerformance({ todayKey: today }: { todayKey: string }) {
                 {label}
               </Button>
             ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={!range || report.isFetching}
+              onClick={() => report.refetch()}
+            >
+              <RefreshCw
+                className={cn("mr-1.5 h-3.5 w-3.5", report.isFetching && "animate-spin")}
+              />
+              Refresh
+            </Button>
           </div>
         </div>
         {preset === "custom" && (
@@ -1386,6 +1403,7 @@ async function downloadProfiles(filenameBase: string, format: FileFormat, rows: 
   }
 
   // Export xlsx
+  const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Browser Profiles");
   worksheet.columns = PROFILE_SHEET_HEADERS.map((h) => ({ header: h, key: h }));
@@ -1613,6 +1631,7 @@ function ImportDialog({
     if (format === "csv") return parseCsv(await file.text());
 
     const buffer = await file.arrayBuffer();
+    const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
     const worksheet = workbook.worksheets[0];

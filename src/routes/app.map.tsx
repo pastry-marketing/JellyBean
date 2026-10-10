@@ -143,6 +143,7 @@ function Inner() {
       }
       return all;
     },
+    staleTime: 30_000,
   });
 
   const placed = useMemo<PlacedAccount[]>(() => {
@@ -183,22 +184,28 @@ function Inner() {
     return placed;
   }, [placed, radiusMode]);
 
-  const coverage = useMemo(() => {
+  const { coverage, coveredToday } = useMemo(() => {
     const byArea = new Map<string, { total: number; covered: number; launches: number }>();
+    let coveredCount = 0;
     for (const profile of priorityProfiles) {
       const key = profile.area?.trim() || "Unassigned";
       const current = byArea.get(key) ?? { total: 0, covered: 0, launches: 0 };
       current.total += 1;
       current.launches += profile.today_launch_count;
-      if (profile.launched_today) current.covered += 1;
+      if (profile.launched_today) {
+        current.covered += 1;
+        coveredCount += 1;
+      }
       byArea.set(key, current);
     }
-    return Array.from(byArea.entries()).sort(
-      (a, b) => b[1].covered - a[1].covered || b[1].total - a[1].total,
-    );
+    return {
+      coverage: Array.from(byArea.entries()).sort(
+        (a, b) => b[1].covered - a[1].covered || b[1].total - a[1].total,
+      ),
+      coveredToday: coveredCount,
+    };
   }, [priorityProfiles]);
 
-  const coveredToday = priorityProfiles.filter((profile) => profile.launched_today).length;
   const missingToday = priorityProfiles.length - coveredToday;
   const fullRadiusCount =
     radiusMode === "all" || radiusMode === "inactive" ? priorityProfiles.length : coveredToday;
