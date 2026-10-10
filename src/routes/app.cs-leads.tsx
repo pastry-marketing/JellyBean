@@ -92,7 +92,7 @@ import { rephraseLeadTemplateWithAi, autoRephraseLeadWithAi } from "@/lib/raw-le
 import { SERVICE_CATEGORIES } from "@/data/service-options";
 
 import { cn } from "@/lib/utils";
-import { confirmDiscardUnsaved } from "@/components/confirm-dialog";
+import { confirmDiscardUnsaved } from "@/components/confirm-dialog-store";
 
 // Garage Door filter: match specific phrases (case-insensitive) across
 // service/pass_it_to and lead text fields. Avoids bare "garage" which
@@ -146,6 +146,14 @@ Forbidden Phrases (do not use in any field):
 - "arrange a visit"`;
 
 export const Route = createFileRoute("/app/cs-leads")({
+  head: () => ({ meta: [
+    { title: "CS Pipeline \u00b7 JellyBean" },
+    { name: "description", content: "Manage customer leads, delivery outcomes, and follow-ups in JellyBean." },
+    { property: "og:title", content: "CS Pipeline \u00b7 JellyBean" },
+    { property: "og:description", content: "Manage customer leads, delivery outcomes, and follow-ups in JellyBean." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,
@@ -246,11 +254,13 @@ type Lead = {
   assigned_by: string | null;
   reference: string | null;
   is_landline: boolean;
+  out_of_base: boolean;
 };
 
 // CS pipeline statuses surfaced in the UI (subset of the DB enum).
 const PIPELINE_STATUSES = [
   "new",
+  "out_of_base",
   "undeliver",
   "wrong_number",
   "wrong_lead",
@@ -261,6 +271,9 @@ const PIPELINE_STATUSES = [
   "service_provider_himself",
   "small_service",
   "converted",
+  "cx_interested",
+  "cx_not_interested",
+  "cx_didnt_replied",
   "need_follow_up",
 ] as const satisfies readonly CsStatus[];
 
@@ -727,7 +740,7 @@ function Inner() {
       let q = supabase
         .from("qualified_leads")
         .select(
-          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline",
+          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline, out_of_base",
         )
         .order("pinned_important", { ascending: false })
         .order("assigned_at", { ascending: false })
@@ -795,7 +808,7 @@ function Inner() {
       const { data, error } = await supabase
         .from("qualified_leads")
         .select(
-          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline",
+          "id, customer_name, customer_number, customer_number_2, context, post_text, pass_it_to, main_area, sub_area, marketing_notes, requirement_1, requirement_2, number_name, original_lead_link, cs_status, cs_notes, followup_at, assigned_at, assigned_to, assigned_by, created_by, is_important, pinned_important, service, reference, images, submitted_by_role, is_landline, out_of_base",
         )
         .eq("id", deepLinkLeadId)
         .maybeSingle();
@@ -1165,7 +1178,9 @@ function Inner() {
       clearTimeout(t);
       supabase.removeChannel(channel);
     };
-  }, []);
+    // `qc` is the context QueryClient singleton — its identity is stable for the
+    // app lifetime, so listing it does not re-run this mount-once subscription.
+  }, [qc]);
 
   useEffect(() => {
     if (!incomingLead) return;
@@ -2151,6 +2166,11 @@ function CsLeadsTable({
                         />
                       ))}
                     <span>{lead.customer_name}</span>
+                    {lead.out_of_base && (
+                      <span className="inline-flex items-center rounded-full bg-[#fde8d5] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b4530a] ring-1 ring-[#f4c79a]">
+                        Out of Base
+                      </span>
+                    )}
                   </div>
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">
@@ -2533,6 +2553,11 @@ function LeadCard({
             </div>
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
+            {lead.out_of_base && (
+              <span className="inline-flex items-center rounded-full bg-[#fde8d5] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b4530a] ring-1 ring-[#f4c79a]">
+                Out of Base
+              </span>
+            )}
             <PhoneCopyLink phone={lead.customer_number} compact />
             {lead.is_landline && (
               <span className="inline-flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-300">
@@ -2900,6 +2925,9 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function statusDotTone(status: string) {
+  if (status === "cx_interested") return "bg-success";
+  if (status === "cx_not_interested") return "bg-destructive";
+  if (status === "cx_didnt_replied") return "bg-warning";
   if (status === "converted" || status === "closed_won") return "bg-success";
   if (
     status === "need_follow_up" ||

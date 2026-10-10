@@ -11,6 +11,9 @@ export type ForwardedStatus =
   | "already_got_someone"
   | "service_provider_himself"
   | "converted"
+  | "cx_interested"
+  | "cx_not_interested"
+  | "cx_didnt_replied"
   | "need_follow_up";
 
 export type { AppRole };

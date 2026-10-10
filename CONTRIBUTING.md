@@ -78,11 +78,10 @@ All four must be clean. Note there is **no** `typecheck` npm script and **no**
 git hook — CI is the only automated gate, so running these locally is what
 saves you a round trip.
 
-> **Current baseline:** `main` is not clean. `tsc --noEmit` reports 34 pre-existing
-> errors and `eslint --max-warnings 0` reports 35 warnings. See
-> [`docs/known-issues.md`](docs/known-issues.md). Do not let these hide _new_
-> errors from you — compare against the baseline, and prefer fixing the
-> surrounding module while you are in it.
+> **Current baseline:** all three gates are clean — `tsc --noEmit` 0 errors,
+> `eslint --max-warnings 0` 0 warnings, tests 46/46. Two known gaps are tracked in
+> [`docs/known-issues.md`](docs/known-issues.md): `vitest` is not yet part of CI,
+> and five `exhaustive-deps` suppressions in `app.crisp-chat.tsx` are intentional.
 
 ---
 

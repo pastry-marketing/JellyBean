@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { formatPhone, normalizePhone } from "@/lib/crm-lite";
+import { formatPhoneInput } from "@/lib/lead-form-utils";
 import { checkDuplicatePhone } from "@/lib/raw-leads.functions";
 import {
   compressVideoInBrowser,
@@ -34,8 +35,15 @@ import {
 } from "@/components/duplicate-lead-dialog";
 import { useSignedLeadUrls } from "@/lib/lead-attachments";
 import { ServiceCombobox } from "@/components/service-combobox";
-
-const BUCKET = "lead-attachments";
+import { StateCombobox } from "@/components/state-combobox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { extractUsStateCodeFromArea } from "@/lib/us-states";
 const MAX_IMAGES = 20;
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -58,6 +66,7 @@ export type LeadFormValues = {
   customerName: string;
   customerNumber: string;
   area: string;
+  stateCode: string;
   service: string;
   context: string;
   exactCustomerText: string;
@@ -74,6 +83,7 @@ type LeadFormInitialValues = {
   customerName?: string;
   customerNumber?: string;
   area?: string;
+  stateCode?: string;
   service?: string;
   context?: string;
   exactCustomerText?: string;
@@ -86,54 +96,14 @@ type LeadFormInitialValues = {
   originalLeadLink?: string | null;
 };
 
-export function formatPhoneInput(value: string): string {
-  const digits = normalizePhone(value);
-  if (digits.length <= 3) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
-  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
-}
-
-export function uploadLeadImages({
-  files,
-  userId,
-  supabase,
-}: {
-  files: File[];
-  userId: string;
-  supabase: {
-    storage: {
-      from: (bucket: string) => {
-        upload: (
-          path: string,
-          file: File,
-          options: { cacheControl: string; upsert: boolean; contentType: string },
-        ) => Promise<{ error: { message: string } | null }>;
-      };
-    };
-  };
-}) {
-  return Promise.all(
-    files.map(async (file) => {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-      const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: file.type,
-      });
-      if (error) throw new Error(`Upload failed: ${error.message}`);
-      // Store the storage path (bucket is private; render via signed URLs).
-      return path;
-    }),
-  );
-}
-
 export function LeadForm({
   title = "Lead form",
   submitLabel = "Save",
   forwardedBy,
   showAttachments,
   areaRequired,
+  showState = false,
+  stateRequired = false,
   referenceMode,
   initialValues,
   submitting,
@@ -149,6 +119,8 @@ export function LeadForm({
   forwardedBy: string;
   showAttachments: boolean;
   areaRequired: boolean;
+  showState?: boolean;
+  stateRequired?: boolean;
   referenceMode: LeadReferenceMode;
   initialValues?: LeadFormInitialValues;
   submitting?: boolean;
@@ -168,6 +140,7 @@ export function LeadForm({
   const [customerNumber, setCustomerNumber] = useState(initialValues?.customerNumber ?? "");
   const [extraNumbers, setExtraNumbers] = useState<string[]>(initialValues?.extraNumbers ?? []);
   const [area, setArea] = useState(initialValues?.area ?? "");
+  const [stateCode, setStateCode] = useState(initialValues?.stateCode ?? "");
   const [service, setService] = useState(initialValues?.service ?? "");
   const [context, setContext] = useState(initialValues?.context ?? "");
   const [exactCustomerText, setExactCustomerText] = useState(
@@ -194,6 +167,26 @@ export function LeadForm({
   const pendingSubmitValuesRef = useRef<LeadFormValues | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [markingNotFound, setMarkingNotFound] = useState(false);
+  const autoDetectedStateRef = useRef<string | null>(null);
+
+  function handleAreaChange(nextArea: string) {
+    setArea(nextArea);
+    if (!showState) return;
+
+    const detectedState = extractUsStateCodeFromArea(nextArea);
+    if (detectedState) {
+      autoDetectedStateRef.current = detectedState;
+      setStateCode(detectedState);
+    } else if (autoDetectedStateRef.current === stateCode) {
+      autoDetectedStateRef.current = null;
+      setStateCode("");
+    }
+  }
+
+  function handleStateChange(nextStateCode: string) {
+    autoDetectedStateRef.current = null;
+    setStateCode(nextStateCode);
+  }
 
   // Baseline snapshot representing the last "clean" state (initial values, or
   // the values that were just persisted via Save Draft). isDirty compares
@@ -203,6 +196,7 @@ export function LeadForm({
     customerName: string;
     customerNumber: string;
     area: string;
+    stateCode: string;
     service: string;
     context: string;
     exactCustomerText: string;
@@ -217,6 +211,7 @@ export function LeadForm({
     customerName: initialValues?.customerName ?? "",
     customerNumber: initialValues?.customerNumber ?? "",
     area: initialValues?.area ?? "",
+    stateCode: initialValues?.stateCode ?? "",
     service: initialValues?.service ?? "",
     context: initialValues?.context ?? "",
     exactCustomerText: initialValues?.exactCustomerText ?? "",
@@ -295,6 +290,7 @@ export function LeadForm({
     customerName !== baseline.customerName ||
     customerNumber !== baseline.customerNumber ||
     area !== baseline.area ||
+    stateCode !== baseline.stateCode ||
     service !== baseline.service ||
     context !== baseline.context ||
     exactCustomerText !== baseline.exactCustomerText ||
@@ -531,6 +527,10 @@ export function LeadForm({
       toast.error("Area is required");
       return;
     }
+    if (stateRequired && !stateCode.trim()) {
+      toast.error("State is required");
+      return;
+    }
     if (!service.trim()) {
       toast.error("Service is required");
       return;
@@ -553,6 +553,7 @@ export function LeadForm({
       customerName: customerName.trim(),
       customerNumber: customerNumber.trim(),
       area: area.trim(),
+      stateCode: stateCode.trim(),
       service: service.trim(),
       context: context.trim(),
       exactCustomerText: exactCustomerText.trim(),
@@ -643,6 +644,7 @@ export function LeadForm({
       customerName: customerName.trim(),
       customerNumber: customerNumber.trim(),
       area: area.trim(),
+      stateCode: stateCode.trim(),
       service: service.trim(),
       context: context.trim(),
       exactCustomerText: exactCustomerText.trim(),
@@ -664,6 +666,7 @@ export function LeadForm({
         customerName: payload.customerName,
         customerNumber: payload.customerNumber,
         area: payload.area,
+        stateCode: payload.stateCode,
         service: payload.service,
         context: payload.context,
         exactCustomerText: payload.exactCustomerText,
@@ -707,11 +710,23 @@ export function LeadForm({
         <Field label="Area" required={areaRequired}>
           <Input
             value={area}
-            onChange={(e) => setArea(e.target.value)}
+            onChange={(e) => handleAreaChange(e.target.value)}
             maxLength={160}
-            placeholder={areaRequired ? "Required area" : "Optional area"}
+            placeholder={
+              areaRequired ? "City or neighborhood, state (e.g. Austin, TX)" : "Optional area"
+            }
           />
         </Field>
+        {showState && (
+          <Field label="State" required={stateRequired} htmlFor="lead-state">
+            <StateCombobox
+              id="lead-state"
+              value={stateCode}
+              onChange={handleStateChange}
+              required={stateRequired}
+            />
+          </Field>
+        )}
         <Field label="Service" required htmlFor="lead-service">
           <ServiceCombobox
             id="lead-service"

@@ -85,7 +85,7 @@ import {
 } from "@/lib/raw-leads.functions";
 import { calculateTotalPages, calculateLastPageSize } from "@/lib/raw-leads-keyset";
 
-import { confirmDialog, confirmDiscardUnsaved } from "@/components/confirm-dialog";
+import { confirmDialog, confirmDiscardUnsaved } from "@/components/confirm-dialog-store";
 import { saveDraft, deleteDraftForSource, countMyDrafts, type LeadDraft } from "@/lib/lead-drafts";
 import { FolderOpen } from "lucide-react";
 
@@ -110,6 +110,16 @@ import { formatCsPipelineShortDate } from "@/lib/cs-pipeline-time";
 import { type RawLeadCursor } from "@/lib/raw-leads-keyset";
 
 export const Route = createFileRoute("/app/raw-leads")({
+  head: () => ({
+    meta: [
+      { title: "Raw Leads \u00b7 JellyBean" },
+      { name: "description", content: "Review and qualify incoming leads in JellyBean." },
+      { property: "og:title", content: "Raw Leads \u00b7 JellyBean" },
+      { property: "og:description", content: "Review and qualify incoming leads in JellyBean." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,
@@ -893,7 +903,9 @@ function Inner() {
     // manual refresh. Polling (not realtime) keeps this off the exceeded
     // Realtime-Messages quota; keepPreviousData avoids flicker and preserves
     // selection, and background refetches pause while the tab is hidden.
-    refetchInterval: 30_000,
+    // Pause auto-refresh while a search/filter is active so we don't re-run the
+    // heavier filtered query on a timer (and don't shift results while reading).
+    refetchInterval: isUnfiltered ? 30_000 : false,
     refetchOnWindowFocus: true,
   });
 
@@ -2721,6 +2733,7 @@ function QualifyDialog({
           original_lead_link: row["Lead Link"] || null,
           canonical_post_id: extractNextdoorPostId(row["Lead Link"]),
           canonical_lead_link: canonicalizeLeadLink(row["Lead Link"]),
+          raw_lead_cache_id: entry.id,
           assigned_by: actorId,
           created_by: actorId,
           cs_status: "new",

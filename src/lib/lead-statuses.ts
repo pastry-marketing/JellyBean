@@ -10,8 +10,12 @@ export const STATUS_LABEL: Record<string, string> = {
   already_received_before: "Already received before",
   service_provider_himself: "Service Provider Himself",
   small_service: "Small Service",
-  converted: "Processed",
+  converted: "Delivered",
+  cx_interested: "CX interested",
+  cx_not_interested: "CX not interested",
+  cx_didnt_replied: "CX didn't replied",
   need_follow_up: "Need Follow Up",
+  out_of_base: "Out of Base",
   called: "Called",
   messaged: "Messaged",
   follow_up: "Follow-up",
@@ -25,6 +29,9 @@ export const STATUS_LABEL: Record<string, string> = {
 
 // Using explicit Tailwind colors to ensure classes are not purged at build time
 export const STATUS_TONE: Record<string, string> = {
+  cx_interested: "bg-success/10 text-success border-success/30 shadow-sm",
+  cx_not_interested: "bg-destructive/10 text-destructive border-destructive/30 shadow-sm",
+  cx_didnt_replied: "bg-warning/10 text-warning border-warning/30 shadow-sm",
   new: "bg-[#e8edf3] text-[#1e3a5f] border-[#d7dee7] shadow-sm",
   undeliver: "bg-[#f8e4e5] text-[#C1292E] border-[#e7b1b3] shadow-sm",
   wrong_number: "bg-[#f8e4e5] text-[#C1292E] border-[#e7b1b3] shadow-sm",
@@ -37,6 +44,7 @@ export const STATUS_TONE: Record<string, string> = {
   small_service: "bg-[#efefec] text-[#74766B] border-[#d5d6cf] shadow-sm",
   converted: "bg-[#def7e8] text-[#07B053] border-[#a9dfbf] shadow-sm",
   need_follow_up: "bg-[#fff5d5] text-[#8f6a00] border-[#f1d27a] shadow-sm",
+  out_of_base: "bg-[#fde8d5] text-[#b4530a] border-[#f4c79a] shadow-sm",
   called: "bg-[#e8edf3] text-[#1e3a5f] border-[#d7dee7] shadow-sm",
   messaged: "bg-[#e8edf3] text-[#1e3a5f] border-[#d7dee7] shadow-sm",
   follow_up: "bg-[#fff5d5] text-[#8f6a00] border-[#f1d27a] shadow-sm",

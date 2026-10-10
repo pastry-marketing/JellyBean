@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import ExcelJS from "exceljs";
 import { downloadCsv } from "@/lib/crm-lite";
 import { useAuth } from "@/hooks/use-auth";
 import { PageHeader, PageBody, RoleGate } from "@/components/page";
@@ -30,11 +29,19 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
+  BarChart3,
+  CalendarCheck,
+  CalendarRange,
+  Pencil,
+  RefreshCw,
+  Star,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { cn } from "@/lib/utils";
 import { launchIncognitonProfile } from "@/lib/incogniton";
+import { pktDayKey, pktNextMidnight, pktTodayKey } from "@/lib/timezone";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -43,10 +50,42 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-export const Route = createFileRoute("/app/browser-profiles")({ component: Page });
+export const Route = createFileRoute("/app/browser-profiles")({
+  head: () => ({
+    meta: [
+      { title: "Browser Profiles \u00b7 JellyBean" },
+      { name: "description", content: "Manage browser profiles for JellyBean account operations." },
+      { property: "og:title", content: "Browser Profiles \u00b7 JellyBean" },
+      {
+        property: "og:description",
+        content: "Manage browser profiles for JellyBean account operations.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: Page,
+});
 
 type LaunchHistoryEntry = { at: string; by: string | null };
+type ProfilePriority = "none" | "first" | "second";
+type ProfileView = "all" | "first" | "second" | "launched_today" | "performance";
+type PerformancePreset = "today" | "week" | "month" | "custom";
+type ProfilePerformanceRow = {
+  profile_id: string;
+  profile_name: string;
+  incogniton_profile_id: string;
+  account_area: string | null;
+  profile_priority: ProfilePriority;
+  launch_count: number;
+  scraped_posts: number;
+  forwarded: number;
+  delivered: number;
+  cx_interested: number;
+  top_service: string | null;
+};
 type IncognitonProfileInsert = Database["public"]["Tables"]["incogniton_profiles"]["Insert"];
+type IncognitonProfileUpdate = Database["public"]["Tables"]["incogniton_profiles"]["Update"];
 type FileFormat = "xlsx" | "csv";
 type ProfileSheetRow = {
   "account name": string;
@@ -71,17 +110,12 @@ type Profile = {
   launch_history: LaunchHistoryEntry[] | null;
   notes: string | null;
   is_active: boolean;
+  profile_priority: ProfilePriority;
 };
 
 type SortDirection = "asc" | "desc";
 type ProfileSortKey =
-  | "profile_name"
-  | "profile_id"
-  | "group"
-  | "account_area"
-  | "geo"
-  | "added_date"
-  | "last_launched";
+  "profile_name" | "profile_id" | "group" | "account_area" | "geo" | "added_date" | "last_launched";
 type ProfileSort = { key: ProfileSortKey; direction: SortDirection };
 
 function compareText(a: string, b: string) {
@@ -174,6 +208,9 @@ function Inner() {
     direction: "desc",
   });
   const [addOpen, setAddOpen] = useState(false);
+  const [editingFor, setEditingFor] = useState<Profile | null>(null);
+  const [profileView, setProfileView] = useState<ProfileView>("all");
+  const [todayKey, setTodayKey] = useState(pktTodayKey);
   const [importOpen, setImportOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [historyFor, setHistoryFor] = useState<Profile | null>(null);
@@ -181,19 +218,33 @@ function Inner() {
   const [howToOpen, setHowToOpen] = useState(false);
   const [selectedProfileIds, setSelectedProfileIds] = useState<Set<string>>(new Set());
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const scheduleRollover = () => {
+      const delay = Math.max(1_000, pktNextMidnight().getTime() - Date.now() + 250);
+      timer = setTimeout(() => {
+        setTodayKey(pktTodayKey());
+        scheduleRollover();
+      }, delay);
+    };
+    scheduleRollover();
+    return () => clearTimeout(timer);
+  }, []);
+
   const profiles = useQuery({
     queryKey: ["incog_profiles"],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("incogniton_profiles")
         .select(
-          "id, profile_name, incogniton_profile_id, group_name, account_area, latitude, longitude, last_launched_at, launched_by_name, launched_by_email, created_at, launch_history, notes, is_active",
+          "id, profile_name, incogniton_profile_id, group_name, account_area, latitude, longitude, last_launched_at, launched_by_name, launched_by_email, created_at, launch_history, notes, is_active, profile_priority",
         )
         .order("created_at", { ascending: false });
       if (error) throw error;
       return (data ?? []) as unknown as Profile[];
     },
     placeholderData: keepPreviousData,
+    staleTime: 30_000,
   });
 
   const groups = useMemo(
@@ -205,9 +256,15 @@ function Inner() {
   );
 
   const filtered = useMemo(() => {
+    if (profileView === "performance") return [];
     const q = query.trim().toLowerCase();
     const list = (profiles.data ?? []).filter((p) => {
       if (addedDateFilter && dateKey(p.created_at) !== addedDateFilter) return false;
+      if (profileView === "first" && p.profile_priority !== "first") return false;
+      if (profileView === "second" && p.profile_priority !== "second") return false;
+      if (profileView === "launched_today" && pktDayKey(p.last_launched_at) !== todayKey) {
+        return false;
+      }
       if (!q) return true;
       return (
         p.profile_name.toLowerCase().includes(q) ||
@@ -216,7 +273,18 @@ function Inner() {
       );
     });
     return [...list].sort((a, b) => compareProfiles(a, b, profileSort));
-  }, [addedDateFilter, profileSort, profiles.data, query]);
+  }, [addedDateFilter, profileSort, profileView, profiles.data, query, todayKey]);
+
+  const profileCounts = useMemo(() => {
+    const all = profiles.data ?? [];
+    const counts = { all: all.length, first: 0, second: 0, launchedToday: 0 };
+    for (const profile of all) {
+      if (profile.profile_priority === "first") counts.first += 1;
+      if (profile.profile_priority === "second") counts.second += 1;
+      if (pktDayKey(profile.last_launched_at) === todayKey) counts.launchedToday += 1;
+    }
+    return counts;
+  }, [profiles.data, todayKey]);
 
   const toggleProfileSort = (key: ProfileSortKey) => {
     setProfileSort((current) =>
@@ -390,6 +458,39 @@ function Inner() {
     }
   }
 
+  async function updatePriority(p: Profile, priority: ProfilePriority) {
+    const previousPriority = p.profile_priority;
+    qc.setQueryData(["incog_profiles"], (old: Profile[] | undefined) => {
+      if (!old) return old;
+      return old.map((profile) =>
+        profile.id === p.id ? { ...profile, profile_priority: priority } : profile,
+      );
+    });
+
+    const { error } = await supabase
+      .from("incogniton_profiles")
+      .update({ profile_priority: priority })
+      .eq("id", p.id);
+    if (error) {
+      qc.setQueryData(["incog_profiles"], (old: Profile[] | undefined) => {
+        if (!old) return old;
+        return old.map((profile) =>
+          profile.id === p.id ? { ...profile, profile_priority: previousPriority } : profile,
+        );
+      });
+      toast.error(error.message);
+      return;
+    }
+
+    toast.success(
+      priority === "first"
+        ? "Moved to 1st Priority"
+        : priority === "second"
+          ? "Moved to 2nd Priority"
+          : "Removed from priority lists",
+    );
+  }
+
   function dateKey(value: string) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "";
@@ -426,34 +527,38 @@ function Inner() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[220px] max-w-md">
-          <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search profile name or ID…"
-            className="h-9 pl-9"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Label htmlFor="added-date-filter" className="text-[12px] text-muted-foreground">
-            Added
-          </Label>
-          <Input
-            id="added-date-filter"
-            type="date"
-            value={addedDateFilter}
-            onChange={(event) => setAddedDateFilter(event.target.value)}
-            className="h-9 w-[150px]"
-          />
-          {addedDateFilter && (
-            <Button variant="ghost" size="sm" onClick={() => setAddedDateFilter("")}>
-              Clear
-            </Button>
-          )}
-        </div>
+        {profileView !== "performance" && (
+          <>
+            <div className="relative flex-1 min-w-[220px] max-w-md">
+              <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search profile name or ID…"
+                className="h-9 pl-9"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="added-date-filter" className="text-[12px] text-muted-foreground">
+                Added
+              </Label>
+              <Input
+                id="added-date-filter"
+                type="date"
+                value={addedDateFilter}
+                onChange={(event) => setAddedDateFilter(event.target.value)}
+                className="h-9 w-[150px]"
+              />
+              {addedDateFilter && (
+                <Button variant="ghost" size="sm" onClick={() => setAddedDateFilter("")}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          </>
+        )}
         <div className="ml-auto flex items-center gap-2">
-          {selectedProfiles.length > 0 && (
+          {profileView !== "performance" && selectedProfiles.length > 0 && (
             <Button variant="outline" onClick={removeSelected} className="text-destructive">
               <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete {selectedProfiles.length}
             </Button>
@@ -492,221 +597,311 @@ function Inner() {
         </div>
       </div>
 
-      <div className="bg-card border rounded-lg overflow-x-auto">
-        <table className="crm-table min-w-[1100px]">
-          <thead>
-            <tr>
-              <th className="w-10">
-                <Checkbox
-                  checked={allFilteredSelected}
-                  disabled={filtered.length === 0}
-                  aria-label="Select all visible profiles"
-                  onCheckedChange={(checked) => toggleAllFiltered(checked === true)}
-                />
-              </th>
-              <th>
-                <SortHeader
-                  label="Profile Name"
-                  active={profileSort.key === "profile_name"}
-                  direction={profileSort.direction}
-                  onClick={() => toggleProfileSort("profile_name")}
-                />
-              </th>
-              <th>
-                <SortHeader
-                  label="Profile ID"
-                  active={profileSort.key === "profile_id"}
-                  direction={profileSort.direction}
-                  onClick={() => toggleProfileSort("profile_id")}
-                />
-              </th>
-              <th>
-                <SortHeader
-                  label="Group"
-                  active={profileSort.key === "group"}
-                  direction={profileSort.direction}
-                  onClick={() => toggleProfileSort("group")}
-                />
-              </th>
-              <th>
-                <SortHeader
-                  label="Account Area"
-                  active={profileSort.key === "account_area"}
-                  direction={profileSort.direction}
-                  onClick={() => toggleProfileSort("account_area")}
-                />
-              </th>
-              <th>
-                <SortHeader
-                  label="Geo"
-                  active={profileSort.key === "geo"}
-                  direction={profileSort.direction}
-                  onClick={() => toggleProfileSort("geo")}
-                />
-              </th>
-              <th>
-                <SortHeader
-                  label="Added Date"
-                  active={profileSort.key === "added_date"}
-                  direction={profileSort.direction}
-                  onClick={() => toggleProfileSort("added_date")}
-                />
-              </th>
-              <th>
-                <SortHeader
-                  label="Last Launched"
-                  active={profileSort.key === "last_launched"}
-                  direction={profileSort.direction}
-                  onClick={() => toggleProfileSort("last_launched")}
-                />
-              </th>
-              <th>Status</th>
-              <th>Notes</th>
-              <th className="text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {profiles.isLoading && !profiles.data && (
+      <Tabs value={profileView} onValueChange={(value) => setProfileView(value as ProfileView)}>
+        <TabsList className="h-auto w-full justify-start gap-1 overflow-x-auto p-1.5 sm:w-auto">
+          <TabsTrigger value="all" className="gap-2">
+            All Profiles
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+              {profileCounts.all}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="first" className="gap-2">
+            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+            1st Priority
+            <span className="rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] tabular-nums text-amber-700 dark:text-amber-300">
+              {profileCounts.first}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="second" className="gap-2">
+            <Star className="h-3.5 w-3.5 text-slate-500" />
+            2nd Priority
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+              {profileCounts.second}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="launched_today" className="gap-2">
+            <CalendarCheck className="h-3.5 w-3.5 text-success" />
+            Launched Today
+            <span className="rounded-full bg-success/10 px-1.5 py-0.5 text-[10px] tabular-nums text-success">
+              {profileCounts.launchedToday}
+            </span>
+          </TabsTrigger>
+          <TabsTrigger value="performance" className="gap-2">
+            <BarChart3 className="h-3.5 w-3.5 text-primary" />
+            Profile Performance
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {profileView === "performance" ? (
+        <ProfilePerformance todayKey={todayKey} />
+      ) : (
+        <div className="bg-card border rounded-lg overflow-x-auto">
+          <table className="crm-table min-w-[1220px]">
+            <thead>
               <tr>
-                <td colSpan={11} className="text-center py-6 text-muted-foreground">
-                  Loading…
-                </td>
+                <th className="w-10">
+                  <Checkbox
+                    checked={allFilteredSelected}
+                    disabled={filtered.length === 0}
+                    aria-label="Select all visible profiles"
+                    onCheckedChange={(checked) => toggleAllFiltered(checked === true)}
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    label="Profile Name"
+                    active={profileSort.key === "profile_name"}
+                    direction={profileSort.direction}
+                    onClick={() => toggleProfileSort("profile_name")}
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    label="Profile ID"
+                    active={profileSort.key === "profile_id"}
+                    direction={profileSort.direction}
+                    onClick={() => toggleProfileSort("profile_id")}
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    label="Group"
+                    active={profileSort.key === "group"}
+                    direction={profileSort.direction}
+                    onClick={() => toggleProfileSort("group")}
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    label="Account Area"
+                    active={profileSort.key === "account_area"}
+                    direction={profileSort.direction}
+                    onClick={() => toggleProfileSort("account_area")}
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    label="Geo"
+                    active={profileSort.key === "geo"}
+                    direction={profileSort.direction}
+                    onClick={() => toggleProfileSort("geo")}
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    label="Added Date"
+                    active={profileSort.key === "added_date"}
+                    direction={profileSort.direction}
+                    onClick={() => toggleProfileSort("added_date")}
+                  />
+                </th>
+                <th>
+                  <SortHeader
+                    label="Last Launched"
+                    active={profileSort.key === "last_launched"}
+                    direction={profileSort.direction}
+                    onClick={() => toggleProfileSort("last_launched")}
+                  />
+                </th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Notes</th>
+                <th className="text-right">Actions</th>
               </tr>
-            )}
-            {!profiles.isLoading && filtered.length === 0 && (
-              <tr>
-                <td colSpan={11} className="text-center py-10 text-muted-foreground">
-                  <Globe className="h-5 w-5 inline mr-2 opacity-50" />
-                  No browser profiles added yet.
-                </td>
-              </tr>
-            )}
-            {filtered.map((p) => {
-              const status = statusOf(p);
-              return (
-                <tr key={p.id} className="crm-data-row">
-                  <td>
-                    <Checkbox
-                      checked={selectedProfileIds.has(p.id)}
-                      aria-label={`Select ${p.profile_name}`}
-                      onCheckedChange={(checked) => toggleProfileSelection(p.id, checked === true)}
-                    />
-                  </td>
-                  <td className="font-medium">{p.profile_name}</td>
-                  <td className="font-mono text-[11px] text-muted-foreground">
-                    {p.incogniton_profile_id}
-                  </td>
-                  <td className="text-[12.5px]">{p.group_name ?? "—"}</td>
-                  <td className="text-[12.5px]">{p.account_area ?? "—"}</td>
-                  <td className="text-[11.5px] font-mono text-muted-foreground">
-                    {p.latitude != null && p.longitude != null
-                      ? `${p.latitude.toFixed(3)}, ${p.longitude.toFixed(3)}`
-                      : "—"}
-                  </td>
-                  <td className="text-[12px] whitespace-nowrap">
-                    <div className="font-medium">{formatAddedDate(p.created_at)}</div>
-                    <div className="text-[10.5px] text-muted-foreground">
-                      {new Date(p.created_at).toLocaleTimeString(undefined, {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </td>
-                  <td>
-                    {p.last_launched_at ? (
-                      <button
-                        type="button"
-                        onClick={() => setHistoryFor(p)}
-                        className="flex flex-col gap-0.5 text-left hover:opacity-80"
-                        title="View last 5 launches"
-                      >
-                        <span
-                          className={cn(
-                            "text-[10.5px] px-2 py-0.5 rounded-full border w-fit",
-                            status === "Launched recently"
-                              ? "bg-success/10 text-success border-success/30"
-                              : "bg-muted text-muted-foreground border-border",
-                          )}
-                        >
-                          {status}
-                        </span>
-                        <span className="text-[11px] font-medium text-foreground pl-0.5">
-                          {p.launched_by_name ?? p.launched_by_email ?? "Unknown"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground pl-0.5">
-                          {new Date(p.last_launched_at).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground/50 italic">
-                        Never launched
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleActive(p)}
-                      className={cn(
-                        "text-[11px] h-7 px-2",
-                        p.is_active
-                          ? "text-success border-success/30"
-                          : "text-muted-foreground border-border",
-                      )}
-                    >
-                      {p.is_active ? "Active" : "Inactive"}
-                    </Button>
-                  </td>
-                  <td className="max-w-[120px]">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setNoteFor(p)}
-                      className="h-7 px-2 text-[11px]"
-                    >
-                      {p.notes ? "Edit Note" : "Add Note"}
-                    </Button>
-                    {p.notes && (
-                      <div
-                        className="text-[10px] text-muted-foreground truncate mt-0.5"
-                        title={p.notes}
-                      >
-                        {p.notes}
-                      </div>
-                    )}
-                  </td>
-                  <td className="text-right space-x-1.5 whitespace-nowrap">
-                    <Button
-                      size="sm"
-                      variant="default"
-                      onClick={() => launch(p)}
-                      title="Launch in Incogniton"
-                    >
-                      <Rocket className="h-3.5 w-3.5 mr-1" /> Launch
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => remove(p)} title="Delete">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+            </thead>
+            <tbody>
+              {profiles.isLoading && !profiles.data && (
+                <tr>
+                  <td colSpan={12} className="text-center py-6 text-muted-foreground">
+                    Loading…
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              )}
+              {!profiles.isLoading && filtered.length === 0 && (
+                <tr>
+                  <td colSpan={12} className="text-center py-10 text-muted-foreground">
+                    <Globe className="h-5 w-5 inline mr-2 opacity-50" />
+                    {profileView === "all"
+                      ? "No browser profiles found."
+                      : profileView === "launched_today"
+                        ? "No profiles launched today."
+                        : `No ${profileView === "first" ? "1st" : "2nd"} Priority profiles.`}
+                  </td>
+                </tr>
+              )}
+              {filtered.map((p) => {
+                const status = statusOf(p);
+                return (
+                  <tr key={p.id} className="crm-data-row">
+                    <td>
+                      <Checkbox
+                        checked={selectedProfileIds.has(p.id)}
+                        aria-label={`Select ${p.profile_name}`}
+                        onCheckedChange={(checked) =>
+                          toggleProfileSelection(p.id, checked === true)
+                        }
+                      />
+                    </td>
+                    <td className="font-medium">{p.profile_name}</td>
+                    <td className="font-mono text-[11px] text-muted-foreground">
+                      {p.incogniton_profile_id}
+                    </td>
+                    <td className="text-[12.5px]">{p.group_name ?? "—"}</td>
+                    <td className="text-[12.5px]">{p.account_area ?? "—"}</td>
+                    <td className="text-[11.5px] font-mono text-muted-foreground">
+                      {p.latitude != null && p.longitude != null
+                        ? `${p.latitude.toFixed(3)}, ${p.longitude.toFixed(3)}`
+                        : "—"}
+                    </td>
+                    <td className="text-[12px] whitespace-nowrap">
+                      <div className="font-medium">{formatAddedDate(p.created_at)}</div>
+                      <div className="text-[10.5px] text-muted-foreground">
+                        {new Date(p.created_at).toLocaleTimeString(undefined, {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </td>
+                    <td>
+                      {p.last_launched_at ? (
+                        <button
+                          type="button"
+                          onClick={() => setHistoryFor(p)}
+                          className="flex flex-col gap-0.5 text-left hover:opacity-80"
+                          title="View last 5 launches"
+                        >
+                          <span
+                            className={cn(
+                              "text-[10.5px] px-2 py-0.5 rounded-full border w-fit",
+                              status === "Launched recently"
+                                ? "bg-success/10 text-success border-success/30"
+                                : "bg-muted text-muted-foreground border-border",
+                            )}
+                          >
+                            {status}
+                          </span>
+                          <span className="text-[11px] font-medium text-foreground pl-0.5">
+                            {p.launched_by_name ?? p.launched_by_email ?? "Unknown"}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground pl-0.5">
+                            {new Date(p.last_launched_at).toLocaleString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </button>
+                      ) : (
+                        <span className="text-[11px] text-muted-foreground/50 italic">
+                          Never launched
+                        </span>
+                      )}
+                    </td>
+                    <td className="min-w-[145px]">
+                      <Select
+                        value={p.profile_priority}
+                        onValueChange={(value) => updatePriority(p, value as ProfilePriority)}
+                      >
+                        <SelectTrigger
+                          className={cn(
+                            "h-8 text-[11px]",
+                            p.profile_priority === "first" &&
+                              "border-amber-400/60 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                            p.profile_priority === "second" && "bg-muted/70",
+                          )}
+                          aria-label={`Change priority for ${p.profile_name}`}
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No priority</SelectItem>
+                          <SelectItem value="first">1st Priority</SelectItem>
+                          <SelectItem value="second">2nd Priority</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </td>
+                    <td>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleActive(p)}
+                        className={cn(
+                          "text-[11px] h-7 px-2",
+                          p.is_active
+                            ? "text-success border-success/30"
+                            : "text-muted-foreground border-border",
+                        )}
+                      >
+                        {p.is_active ? "Active" : "Inactive"}
+                      </Button>
+                    </td>
+                    <td className="max-w-[120px]">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setNoteFor(p)}
+                        className="h-7 px-2 text-[11px]"
+                      >
+                        {p.notes ? "Edit Note" : "Add Note"}
+                      </Button>
+                      {p.notes && (
+                        <div
+                          className="text-[10px] text-muted-foreground truncate mt-0.5"
+                          title={p.notes}
+                        >
+                          {p.notes}
+                        </div>
+                      )}
+                    </td>
+                    <td className="text-right space-x-1.5 whitespace-nowrap">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        onClick={() => launch(p)}
+                        title="Launch in Incogniton"
+                      >
+                        <Rocket className="h-3.5 w-3.5 mr-1" /> Launch
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditingFor(p)}
+                        title="Edit profile"
+                        aria-label={`Edit ${p.profile_name}`}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => remove(p)} title="Delete">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {addOpen && (
-        <AddProfileDialog
+        <ProfileDialog
           userId={auth.user?.id ?? null}
           onClose={() => setAddOpen(false)}
           onSaved={() => {
             setAddOpen(false);
+            qc.invalidateQueries({ queryKey: ["incog_profiles"] });
+          }}
+        />
+      )}
+      {editingFor && (
+        <ProfileDialog
+          userId={auth.user?.id ?? null}
+          profile={editingFor}
+          onClose={() => setEditingFor(null)}
+          onSaved={() => {
+            setEditingFor(null);
             qc.invalidateQueries({ queryKey: ["incog_profiles"] });
           }}
         />
@@ -848,6 +1043,246 @@ function Inner() {
   );
 }
 
+function profilePerformanceRange(
+  preset: PerformancePreset,
+  customFrom: string,
+  customTo: string,
+  today: string,
+) {
+  const todayStart = new Date(`${today}T00:00:00+05:00`);
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  if (preset === "custom") {
+    if (!customFrom || !customTo) return null;
+    const from = new Date(`${customFrom}T00:00:00+05:00`);
+    const to = new Date(new Date(`${customTo}T00:00:00+05:00`).getTime() + dayMs);
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from >= to) return null;
+    return { from: from.toISOString(), to: to.toISOString() };
+  }
+
+  const days = preset === "today" ? 1 : preset === "week" ? 7 : 30;
+  return {
+    from: new Date(todayStart.getTime() - (days - 1) * dayMs).toISOString(),
+    to: new Date(todayStart.getTime() + dayMs).toISOString(),
+  };
+}
+
+function ProfilePerformance({ todayKey: today }: { todayKey: string }) {
+  const [preset, setPreset] = useState<PerformancePreset>("today");
+  const [customFrom, setCustomFrom] = useState(today);
+  const [customTo, setCustomTo] = useState(today);
+  const range = useMemo(
+    () => profilePerformanceRange(preset, customFrom, customTo, today),
+    [customFrom, customTo, preset, today],
+  );
+
+  const report = useQuery({
+    queryKey: ["browser-profile-performance", range?.from, range?.to],
+    enabled: !!range,
+    queryFn: async () => {
+      if (!range) return [];
+      const { data, error } = await supabase.rpc("browser_profile_performance", {
+        _from: range.from,
+        _to: range.to,
+      });
+      if (error) throw error;
+      return (data ?? []) as ProfilePerformanceRow[];
+    },
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
+    gcTime: 15 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const rows = useMemo(() => report.data ?? [], [report.data]);
+  const totals = useMemo(
+    () =>
+      rows.reduce(
+        (sum, row) => ({
+          scraped: sum.scraped + Number(row.scraped_posts),
+          forwarded: sum.forwarded + Number(row.forwarded),
+          delivered: sum.delivered + Number(row.delivered),
+          interested: sum.interested + Number(row.cx_interested),
+        }),
+        { scraped: 0, forwarded: 0, delivered: 0, interested: 0 },
+      ),
+    [rows],
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-xl border bg-card p-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold">Profile performance</h3>
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              Profiles launched in the selected PKT date range and the posts they scraped during
+              that same range.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <CalendarRange className="h-4 w-4 text-muted-foreground" />
+            {(
+              [
+                ["today", "Today"],
+                ["week", "7 days"],
+                ["month", "30 days"],
+                ["custom", "Custom"],
+              ] as const
+            ).map(([value, label]) => (
+              <Button
+                key={value}
+                type="button"
+                size="sm"
+                variant={preset === value ? "default" : "outline"}
+                onClick={() => setPreset(value)}
+              >
+                {label}
+              </Button>
+            ))}
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              disabled={!range || report.isFetching}
+              onClick={() => report.refetch()}
+            >
+              <RefreshCw
+                className={cn("mr-1.5 h-3.5 w-3.5", report.isFetching && "animate-spin")}
+              />
+              Refresh
+            </Button>
+          </div>
+        </div>
+        {preset === "custom" && (
+          <div className="mt-4 flex flex-wrap items-end gap-3 rounded-lg bg-muted/30 p-3">
+            <Field label="From">
+              <Input
+                type="date"
+                value={customFrom}
+                max={customTo || today}
+                onChange={(event) => setCustomFrom(event.target.value)}
+                className="w-[160px]"
+              />
+            </Field>
+            <Field label="To">
+              <Input
+                type="date"
+                value={customTo}
+                min={customFrom}
+                max={today}
+                onChange={(event) => setCustomTo(event.target.value)}
+                className="w-[160px]"
+              />
+            </Field>
+            {!range && (
+              <p className="pb-2 text-xs text-destructive">Choose a valid start and end date.</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <PerformanceStat label="Profiles launched" value={rows.length} />
+        <PerformanceStat label="Posts scraped" value={totals.scraped} />
+        <PerformanceStat label="Forwarded" value={totals.forwarded} />
+        <PerformanceStat label="Delivered" value={totals.delivered} />
+        <PerformanceStat label="CX interested" value={totals.interested} />
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border bg-card">
+        <table className="crm-table min-w-[1020px]">
+          <thead>
+            <tr>
+              <th>Profile</th>
+              <th>City / State</th>
+              <th>Priority</th>
+              <th className="text-right">Launches</th>
+              <th className="text-right">Scraped</th>
+              <th className="text-right">Forwarded</th>
+              <th className="text-right">Delivered</th>
+              <th className="text-right">CX Interested</th>
+              <th>Top Service</th>
+            </tr>
+          </thead>
+          <tbody>
+            {report.isLoading && !report.data && (
+              <tr>
+                <td colSpan={9} className="py-10 text-center text-muted-foreground">
+                  <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> Loading performance…
+                </td>
+              </tr>
+            )}
+            {report.isError && (
+              <tr>
+                <td colSpan={9} className="py-10 text-center text-destructive">
+                  Could not load profile performance. {String(report.error.message)}
+                </td>
+              </tr>
+            )}
+            {!report.isLoading && !report.isError && rows.length === 0 && (
+              <tr>
+                <td colSpan={9} className="py-10 text-center text-muted-foreground">
+                  No profiles were launched in this date range.
+                </td>
+              </tr>
+            )}
+            {rows.map((row) => (
+              <tr key={row.profile_id} className="crm-data-row">
+                <td>
+                  <div className="font-medium">{row.profile_name}</div>
+                  <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                    {row.incogniton_profile_id}
+                  </div>
+                </td>
+                <td>{row.account_area || "—"}</td>
+                <td>
+                  <PriorityBadge priority={row.profile_priority} />
+                </td>
+                <MetricCell value={row.launch_count} />
+                <MetricCell value={row.scraped_posts} />
+                <MetricCell value={row.forwarded} />
+                <MetricCell value={row.delivered} />
+                <MetricCell value={row.cx_interested} />
+                <td className="font-medium">{row.top_service || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function PerformanceStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-2xl font-semibold tabular-nums">{value.toLocaleString()}</div>
+    </div>
+  );
+}
+
+function MetricCell({ value }: { value: number }) {
+  return (
+    <td className="text-right font-semibold tabular-nums">{Number(value).toLocaleString()}</td>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: ProfilePriority }) {
+  if (priority === "first") {
+    return (
+      <span className="rounded-full bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+        1st Priority
+      </span>
+    );
+  }
+  if (priority === "second") {
+    return <span className="rounded-full bg-muted px-2 py-1 text-[11px]">2nd Priority</span>;
+  }
+  return <span className="text-[11px] text-muted-foreground">No priority</span>;
+}
+
 const PROFILE_SHEET_HEADERS = [
   "account name",
   "profile id",
@@ -968,6 +1403,7 @@ async function downloadProfiles(filenameBase: string, format: FileFormat, rows: 
   }
 
   // Export xlsx
+  const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   const worksheet = workbook.addWorksheet("Browser Profiles");
   worksheet.columns = PROFILE_SHEET_HEADERS.map((h) => ({ header: h, key: h }));
@@ -998,23 +1434,26 @@ async function withTimeout<T>(promise: PromiseLike<T>, ms: number, message: stri
   }
 }
 
-// ── Add Profile Dialog (manual entry — works 100% without CORS/extensions) ───
+// ── Add / edit profile dialog ────────────────────────────────────────────────
 
-function AddProfileDialog({
+function ProfileDialog({
   userId,
+  profile,
   onClose,
   onSaved,
 }: {
   userId: string | null;
+  profile?: Profile;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [profileId, setProfileId] = useState("");
-  const [profileName, setProfileName] = useState("");
-  const [groupName, setGroupName] = useState("");
-  const [accountArea, setAccountArea] = useState("");
-  const [latitude, setLatitude] = useState("");
-  const [longitude, setLongitude] = useState("");
+  const [profileId, setProfileId] = useState(profile?.incogniton_profile_id ?? "");
+  const [profileName, setProfileName] = useState(profile?.profile_name ?? "");
+  const [groupName, setGroupName] = useState(profile?.group_name ?? "");
+  const [accountArea, setAccountArea] = useState(profile?.account_area ?? "");
+  const [latitude, setLatitude] = useState(profile?.latitude?.toString() ?? "");
+  const [longitude, setLongitude] = useState(profile?.longitude?.toString() ?? "");
+  const [priority, setPriority] = useState<ProfilePriority>(profile?.profile_priority ?? "none");
   const [saving, setSaving] = useState(false);
 
   async function save() {
@@ -1046,24 +1485,27 @@ function AddProfileDialog({
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from("incogniton_profiles").upsert(
-      {
-        incogniton_profile_id: id,
-        profile_name: name,
-        group_name: groupName.trim() || null,
-        account_area: area,
-        latitude: lat,
-        longitude: lng,
-        created_by: userId,
-      } satisfies IncognitonProfileInsert,
-      { onConflict: "incogniton_profile_id", ignoreDuplicates: false },
-    );
+    const values = {
+      incogniton_profile_id: id,
+      profile_name: name,
+      group_name: groupName.trim() || null,
+      account_area: area,
+      latitude: lat,
+      longitude: lng,
+      profile_priority: priority,
+    } satisfies IncognitonProfileUpdate;
+    const { error } = profile
+      ? await supabase.from("incogniton_profiles").update(values).eq("id", profile.id)
+      : await supabase.from("incogniton_profiles").insert({
+          ...values,
+          created_by: userId,
+        } satisfies IncognitonProfileInsert);
     setSaving(false);
     if (error) {
       toast.error(error.message);
       return;
     }
-    toast.success("Profile saved ✓");
+    toast.success(profile ? "Profile updated ✓" : "Profile saved ✓");
     onSaved();
   }
 
@@ -1074,7 +1516,9 @@ function AddProfileDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <div>
-          <h2 className="text-lg font-semibold">Add Incogniton Profile</h2>
+          <h2 className="text-lg font-semibold">
+            {profile ? "Edit Incogniton Profile" : "Add Incogniton Profile"}
+          </h2>
           <p className="text-[12px] text-muted-foreground mt-1">
             Only Group is optional. Geo coordinates will plot the profile on the map with a 50-mile
             radius.
@@ -1113,6 +1557,21 @@ function AddProfileDialog({
               />
             </Field>
           </div>
+          <Field label="Priority">
+            <Select
+              value={priority}
+              onValueChange={(value) => setPriority(value as ProfilePriority)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No priority</SelectItem>
+                <SelectItem value="first">1st Priority</SelectItem>
+                <SelectItem value="second">2nd Priority</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Latitude *">
               <Input
@@ -1139,7 +1598,7 @@ function AddProfileDialog({
           </Button>
           <Button onClick={save} disabled={saving}>
             {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Save Profile
+            {profile ? "Save Changes" : "Save Profile"}
           </Button>
         </div>
       </div>
@@ -1172,6 +1631,7 @@ function ImportDialog({
     if (format === "csv") return parseCsv(await file.text());
 
     const buffer = await file.arrayBuffer();
+    const ExcelJS = (await import("exceljs")).default;
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
     const worksheet = workbook.worksheets[0];

@@ -24,6 +24,7 @@ Nextdoor scraping → AI qualification → customer-service pipeline → outcome
 - [Quick start](#quick-start)
 - [Environment variables](#environment-variables)
 - [Scripts](#scripts)
+- [Daily tasks](#daily-tasks)
 - [Project structure](#project-structure)
 - [Database](#database)
 - [Edge functions](#edge-functions)
@@ -272,6 +273,19 @@ in **Supabase Vault**, and linked through the `crisp_workspaces` table. Do **not
 
 ---
 
+## Daily tasks
+
+If you use JellyBean to do your job, start at **[`docs/daily-tasks.md`](docs/daily-tasks.md)**
+rather than here. It covers the daily routine for each of the nine roles, the raw
+lead and CS status values, the two timezone rules, and what to do when something
+breaks.
+
+In short: the pipeline is **Raw Leads → Forwarded → CS Pipeline → outcome**, and
+each stage has an owner. A lead's value depends on someone recording an honest,
+specific status the same day they made contact.
+
+---
+
 ## Project structure
 
 ```
@@ -361,6 +375,24 @@ additionally reads `SUPABASE_ANON_KEY`. Deploy with:
 supabase functions deploy crisp-webhook
 ```
 
+### Working on edge functions locally
+
+Edge Functions are **Deno**, not Node. They are configured by
+`supabase/functions/deno.json` and are explicitly **excluded** from the app's
+`tsconfig.json` — their remote `https://` imports and the `Deno` global are
+unresolvable in the app's Node/Vite project, and including them makes editors
+report phantom errors against VS Code's internal libs.
+
+Use the Deno CLI or the Deno VS Code extension for these files:
+
+```bash
+deno check supabase/functions/*/index.ts   # type check
+deno lint  supabase/functions/*/index.ts   # lint
+```
+
+They are still formatted by Prettier through ESLint (`bun run format` covers
+them), so keep `deno check` and `bun run lint` both clean.
+
 ---
 
 ## Quality gates
@@ -373,23 +405,19 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR to `main`:
 
 A second workflow enforces [Conventional Commits](https://www.conventionalcommits.org/) PR titles.
 
-> ### ⚠️ Current status: CI is failing on `main`
+> ### Current status: all CI gates green
 >
-> At the time of writing, step 2 reports **34 pre-existing type errors** and step 3 reports
-> **35 warnings** (which `--max-warnings 0` treats as failures). All 46 tests pass.
+> | Check                            | Result        |
+> | -------------------------------- | ------------- |
+> | `bun run test:run`               | ✅ 46 / 46    |
+> | `bunx tsc --noEmit`              | ✅ 0 errors   |
+> | `bunx eslint . --max-warnings 0` | ✅ 0 warnings |
 >
-> | Check               | Result                   |
-> | ------------------- | ------------------------ |
-> | `bun run test:run`  | ✅ 46 / 46               |
-> | `bunx tsc --noEmit` | ❌ 34 errors             |
-> | `bun run lint`      | ⚠️ 0 errors, 35 warnings |
->
-> Errors are concentrated in the Crisp and webhook modules:
-> `src/routes/app.crisp-chat.tsx` (12), `src/lib/crisp.functions.ts` (10),
-> `src/lib/crisp.server.ts` (8), `src/components/crisp-message-notifier.tsx` (2),
-> `src/lib/nextdoor-leads-webhook.ts` (2).
->
-> See [`docs/known-issues.md`](docs/known-issues.md) for the full breakdown.
+> All three passed as of 2026-10-01 (previously 34 type errors and 35 lint
+> warnings). Two gaps remain, documented in
+> [`docs/known-issues.md`](docs/known-issues.md): `vitest` is not yet run in CI,
+> and five `react-hooks/exhaustive-deps` suppressions in `app.crisp-chat.tsx` are
+> deliberate — they stop the Realtime channel resubscribing on every render.
 
 ### Conventions
 
@@ -489,6 +517,8 @@ is mitigated in practice — but see [`docs/known-issues.md`](docs/known-issues.
 
 | Document                                                               | Contents                                                |
 | ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| [`docs/daily-tasks.md`](docs/daily-tasks.md)                           | **Start here** — daily routine for every role           |
+| [`CHANGELOG.md`](CHANGELOG.md)                                         | Changes grouped into review units, with risk and checks |
 | [`docs/architecture.md`](docs/architecture.md)                         | Request lifecycle, data layer, caching, realtime design |
 | [`docs/backend-verification.md`](docs/backend-verification.md)         | Read-only production audit: schema, RLS, storage, auth  |
 | [`docs/known-issues.md`](docs/known-issues.md)                         | Open defects and inconsistencies, with severity         |

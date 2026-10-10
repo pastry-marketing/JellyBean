@@ -56,3 +56,43 @@ export const US_STATES: { code: string; name: string }[] = [
 export const US_STATE_NAME: Record<string, string> = Object.fromEntries(
   US_STATES.map((s) => [s.code, s.name]),
 );
+
+const US_STATE_BY_NAME = new Map(US_STATES.map((state) => [state.name.toLowerCase(), state.code]));
+const US_STATE_CODES = new Set(US_STATES.map((state) => state.code));
+
+/** Resolve a complete state name or two-letter abbreviation to its canonical code. */
+export function resolveUsStateCode(value: string): string | null {
+  const normalized = value.trim().replace(/[.,]+$/, "");
+  if (!normalized) return null;
+
+  const upper = normalized.toUpperCase();
+  if (US_STATE_CODES.has(upper)) return upper;
+  return US_STATE_BY_NAME.get(normalized.toLowerCase()) ?? null;
+}
+
+/**
+ * Detect a state at the end of an area such as "Austin, Texas", "Austin, TX",
+ * or "Austin TX". Limiting detection to the suffix avoids matching state names
+ * that happen to appear inside a neighborhood or street name.
+ */
+export function extractUsStateCodeFromArea(area: string): string | null {
+  const trimmed = area.trim().replace(/[.,]+$/, "");
+  if (!trimmed) return null;
+
+  const statesByLongestName = [...US_STATES].sort((a, b) => b.name.length - a.name.length);
+  const lower = trimmed.toLowerCase();
+  for (const state of statesByLongestName) {
+    const name = state.name.toLowerCase();
+    if (lower === name || lower.endsWith(` ${name}`) || lower.endsWith(`,${name}`)) {
+      return state.code;
+    }
+  }
+
+  const abbreviationMatch = trimmed.match(/(?:^|[-,/|\s])([A-Za-z]{2})$/);
+  if (!abbreviationMatch) return null;
+
+  const candidate = abbreviationMatch[1];
+  const hasExplicitSeparator = /[-,/|]\s*[A-Za-z]{2}$/.test(trimmed);
+  if (!hasExplicitSeparator && candidate !== candidate.toUpperCase()) return null;
+  return resolveUsStateCode(candidate);
+}

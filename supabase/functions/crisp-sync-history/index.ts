@@ -36,6 +36,22 @@ function isCrispMaskedMessage(content: string | null | undefined): boolean {
   return stripped.length >= 3 && /^x+$/i.test(stripped);
 }
 
+/**
+ * Coerce an untyped Crisp timestamp to epoch milliseconds.
+ * Crisp returns `timestamp` as epoch ms, but the payload is untyped JSON, so
+ * every read of it must be narrowed before it is compared or passed to `Date`.
+ */
+function toTimestamp(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  return 0;
+}
+
 /** Parse raw message content for any message type. */
 function parseMessageContent(msg: Record<string, unknown>): string {
   const rawContent = msg.content;
@@ -165,10 +181,11 @@ serve(async (req) => {
           const listRes = await fetch(listUrl, { headers });
           if (!listRes.ok) {
             const errJson = await listRes.json().catch(() => ({}));
-            const reason =
+            const reason = String(
               (errJson as Record<string, unknown>)?.reason ||
-              ((errJson as Record<string, unknown>)?.data as Record<string, unknown>)?.message ||
-              `HTTP ${listRes.status}`;
+                ((errJson as Record<string, unknown>)?.data as Record<string, unknown>)?.message ||
+                `HTTP ${listRes.status}`,
+            );
             console.error(
               `Crisp history sync failed for workspace ${websiteId} on page ${page}: ${reason}`,
             );
@@ -257,7 +274,9 @@ serve(async (req) => {
 
                   if (messagesList.length > 0) {
                     // Sort messages chronologically ascending for correct ordering
-                    messagesList.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+                    messagesList.sort(
+                      (a, b) => toTimestamp(a.timestamp) - toTimestamp(b.timestamp),
+                    );
 
                     // ── AWAITING OPERATOR REPLY CALCULATION ─────────────────────────
                     let lastCustomerMsgTime: string | null = null;
@@ -268,11 +287,9 @@ serve(async (req) => {
                     for (let i = messagesList.length - 1; i >= 0; i--) {
                       const m = messagesList[i];
                       const fromStr = String(m.from || "user").toLowerCase();
-                      const ts = m.timestamp || 0;
+                      const ts = toTimestamp(m.timestamp);
                       if (fromStr !== "operator" && !lastCustomerMsgTime) {
-                        lastCustomerMsgTime = m.timestamp
-                          ? new Date(m.timestamp).toISOString()
-                          : null;
+                        lastCustomerMsgTime = ts ? new Date(ts).toISOString() : null;
                         lastCustomerMsgContent = parseMessageContent(m);
                         lastCustomerTimestamp = ts;
                       } else if (fromStr === "operator" && !lastOperatorTimestamp) {
@@ -292,17 +309,19 @@ serve(async (req) => {
                     // Track newest overall message for last_message + last_message_at
                     const newestMsg = messagesList[messagesList.length - 1];
                     const newestText = parseMessageContent(newestMsg);
-                    const newestTime = newestMsg.timestamp
-                      ? new Date(newestMsg.timestamp).toISOString()
+                    const newestTs = toTimestamp(newestMsg.timestamp);
+                    const newestTime = newestTs
+                      ? new Date(newestTs).toISOString()
                       : new Date().toISOString();
 
                     // Upsert all messages (ignore duplicates via 23505)
                     for (const msg of messagesList) {
                       const textContent = parseMessageContent(msg);
-                      const crispMsgId = String(msg.fingerprint || `${sessionId}_${msg.timestamp}`);
+                      const msgTs = toTimestamp(msg.timestamp);
+                      const crispMsgId = String(msg.fingerprint || `${sessionId}_${msgTs}`);
                       const isOperator = String(msg.from).toLowerCase() === "operator";
-                      const sentAt = msg.timestamp
-                        ? new Date(msg.timestamp).toISOString()
+                      const sentAt = msgTs
+                        ? new Date(msgTs).toISOString()
                         : new Date().toISOString();
 
                       const { error: msgErr } = await supabase.from("crisp_messages").insert({

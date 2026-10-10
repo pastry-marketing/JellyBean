@@ -29,6 +29,7 @@ import {
 
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import {
   addCrispConversationNote,
   addCrispWorkspace,
@@ -66,6 +67,14 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/page";
 
 export const Route = createFileRoute("/app/crisp-chat")({
+  head: () => ({ meta: [
+    { title: "Crisp Chat \u00b7 JellyBean" },
+    { name: "description", content: "Manage customer conversations across connected Crisp workspaces." },
+    { property: "og:title", content: "Crisp Chat \u00b7 JellyBean" },
+    { property: "og:description", content: "Manage customer conversations across connected Crisp workspaces." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: CrispChatPage,
 });
 
@@ -82,9 +91,29 @@ type ConversationRecord = {
   last_message_at: string | null;
   last_customer_unread_at: string | null;
   unread_count: number | null;
-  metadata: Record<string, unknown> | null;
+  metadata: Json | null;
   created_at: string | null;
   updated_at: string | null;
+};
+
+/**
+ * Attachment content as Crisp sends it. The webhook payload is untyped JSON, so
+ * these fields are read through an explicit shape rather than off `object`.
+ */
+type CrispAttachmentContent = {
+  url?: string;
+  preview?: string;
+  name?: string;
+  filename?: string;
+  type?: string;
+  size?: number;
+  duration?: number;
+  text?: string;
+};
+
+type CrispRawPayload = {
+  type?: string;
+  content?: string | CrispAttachmentContent;
 };
 
 type MessageRecord = {
@@ -98,7 +127,7 @@ type MessageRecord = {
   content: string;
   message_type: string | null;
   sent_at: string;
-  raw_payload: Record<string, unknown> | null;
+  raw_payload: CrispRawPayload | null;
 };
 
 type WorkspaceRecord = {
@@ -123,7 +152,7 @@ type NoteRecord = {
   can_delete?: boolean;
 };
 
-export function isCrispMaskedMessage(content: string | null | undefined): boolean {
+function isCrispMaskedMessage(content: string | null | undefined): boolean {
   if (!content) return false;
   const trimmed = content.trim();
   if (!trimmed) return false;
@@ -143,23 +172,26 @@ export type CrispAttachment = {
   isFile: boolean;
 };
 
-export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | null {
+function getCustomerAttachment(msg: MessageRecord): CrispAttachment | null {
   const isCustomer =
     msg.sender_type === "customer" || msg.sender_type === "user" || msg.direction === "incoming";
   if (!isCustomer) return null;
 
   const raw = msg.raw_payload;
   const rawContent = raw?.content;
+  // Narrowed once here so the object fields stay readable further down.
+  const attachmentContent =
+    rawContent && typeof rawContent === "object" ? (rawContent as CrispAttachmentContent) : null;
   let url = "";
   let name = "";
   let type = "";
   let size: number | undefined = undefined;
 
-  if (rawContent && typeof rawContent === "object") {
-    url = rawContent.url || rawContent.preview || "";
-    name = rawContent.name || rawContent.filename || "";
-    type = rawContent.type || "";
-    size = typeof rawContent.size === "number" ? rawContent.size : undefined;
+  if (attachmentContent) {
+    url = attachmentContent.url || attachmentContent.preview || "";
+    name = attachmentContent.name || attachmentContent.filename || "";
+    type = attachmentContent.type || "";
+    size = typeof attachmentContent.size === "number" ? attachmentContent.size : undefined;
   } else if (
     typeof rawContent === "string" &&
     (rawContent.startsWith("http://") || rawContent.startsWith("https://"))
@@ -202,8 +234,8 @@ export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | nul
   const isFile = !isImage && !isAudio;
 
   if (isAudio) {
-    if (typeof rawContent?.duration === "number") {
-      name = `Voice Message (${Math.round(rawContent.duration)}s)`;
+    if (typeof attachmentContent?.duration === "number") {
+      name = `Voice Message (${Math.round(attachmentContent.duration)}s)`;
     } else {
       name = "Voice Note";
     }
@@ -228,7 +260,7 @@ export function getCustomerAttachment(msg: MessageRecord): CrispAttachment | nul
   };
 }
 
-export function getDisplayableCaption(
+function getDisplayableCaption(
   content: string | null | undefined,
   attachment: CrispAttachment | null,
 ): string | null {
@@ -269,14 +301,14 @@ export function getDisplayableCaption(
   return trimmed;
 }
 
-export function formatFileSize(bytes?: number): string {
+function formatFileSize(bytes?: number): string {
   if (!bytes || bytes <= 0) return "";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function formatMessageDateTime(dateStr: string | null | undefined): string {
+function formatMessageDateTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return "";
@@ -293,7 +325,7 @@ export function formatMessageDateTime(dateStr: string | null | undefined): strin
   return `${datePart} • ${timePart}`;
 }
 
-export function formatConversationTime(dateStr: string | null | undefined): string {
+function formatConversationTime(dateStr: string | null | undefined): string {
   if (!dateStr) return "";
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return "";
@@ -688,11 +720,19 @@ function CrispInboxInner() {
       // has not yet been populated when loadConversations reads it.
       loadConversations("all", true, activeIds);
     });
+    // Mount-once by design. `loadWorkspaces` / `loadConversations` are plain
+    // functions (new identity every render), so listing them would re-run this
+    // on every render. Fresh values are read through refs instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Re-run server-side search whenever searchQuery changes
   useEffect(() => {
     loadConversations(selectedWebsiteId, true, undefined, searchQuery);
+    // `selectedWebsiteId` is read at call time on purpose: this effect exists to
+    // re-run the server-side search when `searchQuery` changes, not when the
+    // workspace filter changes (a separate effect below owns that).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery]);
 
   // Reload conversations when selected workspace filter changes
@@ -708,6 +748,10 @@ function CrispInboxInner() {
         setNotes([]);
       }
     }
+    // `conversations` is deliberately omitted: reading it here would make this
+    // effect depend on the list it mutates via `loadConversations`, which
+    // re-fetches and can loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWebsiteId]);
 
   // Load messages & notes when active conversation selection changes
@@ -719,6 +763,7 @@ function CrispInboxInner() {
       setMessages([]);
       setNotes([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConversationId]);
 
   // Handle selecting a conversation
@@ -864,6 +909,11 @@ function CrispInboxInner() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(channel);
     };
+    // Mount-once by design. `loadMessages` reads the active conversation through
+    // `selectedConversationIdRef`, so it does not need to be a dependency; adding
+    // it (new identity every render) would tear down and rebuild the realtime
+    // channel and polling interval on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Map of workspace website_id -> workspace_name

@@ -19,6 +19,7 @@ import {
   FileSpreadsheet,
   BellRing,
   Users,
+  MapPinned,
 } from "lucide-react";
 
 import { CrmUpdatesNotifier } from "@/components/crm-updates-notifier";
@@ -56,6 +57,12 @@ const PENDING_ITEM: Item = {
   icon: BellRing,
 };
 
+const SERVICE_AREA_BASE_ITEM: Item = {
+  to: "/app/service-area-base",
+  label: "Service/Area Base",
+  icon: MapPinned,
+};
+
 const ADMIN: Item[] = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard, shortcut: "D" },
   { to: "/app/raw-leads", label: "Raw Leads", icon: Table2, shortcut: "L" },
@@ -69,6 +76,7 @@ const ADMIN: Item[] = [
   { to: "/app/lead-assignment", label: "Lead Assignment", icon: PieChart },
   { to: "/app/logs", label: "Activity", icon: ScrollText, shortcut: "G" },
   { to: "/app/google-sheets", label: "Google Sheets", icon: FileSpreadsheet, shortcut: "H" },
+  SERVICE_AREA_BASE_ITEM,
   { to: "/app/settings", label: "Settings", icon: Settings, shortcut: "S" },
 ];
 
@@ -94,6 +102,7 @@ const CS_ADMIN_ITEMS: Item[] = [
   PENDING_ITEM,
   CRISP_ITEM,
   { to: "/app/lead-assignment", label: "Lead Assignment", icon: PieChart },
+  SERVICE_AREA_BASE_ITEM,
   { to: "/app/settings", label: "Users", icon: Users },
 ];
 
@@ -121,6 +130,7 @@ const SUB_ADMIN: Item[] = ADMIN_FULL.filter(
   (item) =>
     item.to !== "/app/cs-leads" &&
     item.to !== "/app/pending-leads" &&
+    item.to !== "/app/service-area-base" &&
     item.to !== "/app/logs" &&
     item.to !== "/app/crisp-chat",
 ).map((item) => (item.to === "/app/settings" ? { ...item, label: "Users", icon: Users } : item));
@@ -158,7 +168,10 @@ function navigationGroupsForRole(role: AppRole | null): Array<{ label: string; i
       paths: ["/app/cs-leads", "/app/pending-leads", "/app/crisp-chat", "/app/lead-assignment"],
     },
     { label: "Intelligence", paths: ["/app/analytics", "/app/reports"] },
-    { label: "Administration", paths: ["/app/logs", "/app/google-sheets", "/app/settings"] },
+    {
+      label: "Administration",
+      paths: ["/app/logs", "/app/google-sheets", "/app/service-area-base", "/app/settings"],
+    },
   ];
   return groups
     .map((group) => ({

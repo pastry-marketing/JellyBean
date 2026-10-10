@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Trash2, Pencil } from "lucide-react";
 import { toast } from "sonner";
-import { confirmDialog } from "@/components/confirm-dialog";
+import { confirmDialog } from "@/components/confirm-dialog-store";
 import { listCsTeam } from "@/lib/cs-team.functions";
 import { ServiceAssignmentTab } from "@/components/service-assignment-tab";
 import {
@@ -49,6 +49,14 @@ import { US_STATES, US_STATE_NAME } from "@/lib/us-states";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/lead-statuses";
 
 export const Route = createFileRoute("/app/lead-assignment")({
+  head: () => ({ meta: [
+    { title: "Lead Assignment \u00b7 JellyBean" },
+    { name: "description", content: "Manage customer service lead routing and assignment totals." },
+    { property: "og:title", content: "Lead Assignment \u00b7 JellyBean" },
+    { property: "og:description", content: "Manage customer service lead routing and assignment totals." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,
@@ -600,7 +608,7 @@ function AnalyticsTab() {
                 <TableHead>CS User</TableHead>
                 <TableHead>Assigned States</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Processed</TableHead>
+                <TableHead className="text-right">Delivered</TableHead>
                 <TableHead className="text-right">Pending</TableHead>
                 <TableHead>Leads by State</TableHead>
                 <TableHead>Leads by Status</TableHead>

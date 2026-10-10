@@ -10,10 +10,25 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import type { PlacedAccount } from "@/components/leaflet-map";
-import { pktDayKey, pktTodayKey } from "@/lib/timezone";
+import { pktDayKey, pktNextMidnight, pktTodayKey } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/app/map")({ component: Page });
+export const Route = createFileRoute("/app/map")({
+  head: () => ({
+    meta: [
+      { title: "Coverage Map \u00b7 JellyBean" },
+      { name: "description", content: "Review account coverage and browser profile activity." },
+      { property: "og:title", content: "Coverage Map \u00b7 JellyBean" },
+      {
+        property: "og:description",
+        content: "Review account coverage and browser profile activity.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
+  component: Page,
+});
 
 type LaunchHistoryEntry = { at: string; by?: string | null };
 
@@ -27,6 +42,7 @@ type BrowserProfile = {
   launch_history: Json;
   notes: string | null;
   is_active: boolean;
+  profile_priority: "none" | "first" | "second";
 };
 
 type LeafletMapComp = ComponentType<{
@@ -37,7 +53,7 @@ type LeafletMapComp = ComponentType<{
   onMapClick?: (lat: number, lng: number) => void;
 }>;
 
-type MapRadiusMode = "daily" | "all" | "inactive" | "inactive_daily";
+type MapRadiusMode = "first_daily" | "second_daily" | "all" | "inactive" | "inactive_daily";
 
 function Page() {
   const auth = useAuth();
@@ -58,17 +74,39 @@ function Page() {
 
 function Inner() {
   const [visuals, setVisuals] = useState(true);
-  const [radiusMode, setRadiusMode] = useState<MapRadiusMode>("daily");
+  const [radiusMode, setRadiusMode] = useState<MapRadiusMode>("first_daily");
   const [LeafletMap, setLeafletMap] = useState<LeafletMapComp | null>(null);
   const [tempPin, setTempPin] = useState<{ lat: number; lng: number } | null>(null);
+  const [todayKey, setTodayKey] = useState(pktTodayKey);
   const coverageScrollerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const visualsValue = localStorage.getItem("map.visuals");
     const modeValue = localStorage.getItem("map.radiusMode");
     if (visualsValue === "1") setVisuals(true);
-    if (modeValue === "all" || modeValue === "daily") setRadiusMode(modeValue);
+    if (modeValue === "daily") setRadiusMode("first_daily");
+    if (
+      modeValue === "all" ||
+      modeValue === "first_daily" ||
+      modeValue === "second_daily" ||
+      modeValue === "inactive" ||
+      modeValue === "inactive_daily"
+    )
+      setRadiusMode(modeValue);
     import("@/components/leaflet-map").then((module) => setLeafletMap(() => module.default));
+  }, []);
+
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    const scheduleRollover = () => {
+      const delay = Math.max(1_000, pktNextMidnight().getTime() - Date.now() + 250);
+      timeout = setTimeout(() => {
+        setTodayKey(pktTodayKey());
+        scheduleRollover();
+      }, delay);
+    };
+    scheduleRollover();
+    return () => clearTimeout(timeout);
   }, []);
 
   const toggle = (next: boolean) => {
@@ -94,7 +132,7 @@ function Inner() {
         const { data, error } = await supabase
           .from("incogniton_profiles")
           .select(
-            "id, profile_name, account_area, latitude, longitude, last_launched_at, launch_history, notes, is_active",
+            "id, profile_name, account_area, latitude, longitude, last_launched_at, launch_history, notes, is_active, profile_priority",
           )
           .order("last_launched_at", { ascending: false, nullsFirst: false })
           .range(from, to);
@@ -105,9 +143,8 @@ function Inner() {
       }
       return all;
     },
+    staleTime: 30_000,
   });
-
-  const todayKey = useMemo(() => pktTodayKey(), []);
 
   const placed = useMemo<PlacedAccount[]>(() => {
     return (profiles.data ?? [])
@@ -129,28 +166,49 @@ function Inner() {
           today_launch_count: todayLaunchCount,
           notes: profile.notes,
           is_active: profile.is_active,
+          profile_priority: profile.profile_priority,
         };
       });
   }, [profiles.data, todayKey]);
 
-  const coverage = useMemo(() => {
+  const priorityProfiles = useMemo(() => {
+    if (radiusMode === "first_daily") {
+      return placed.filter((profile) => profile.profile_priority === "first");
+    }
+    if (radiusMode === "second_daily") {
+      return placed.filter((profile) => profile.profile_priority === "second");
+    }
+    if (radiusMode === "inactive" || radiusMode === "inactive_daily") {
+      return placed.filter((profile) => !profile.is_active);
+    }
+    return placed;
+  }, [placed, radiusMode]);
+
+  const { coverage, coveredToday } = useMemo(() => {
     const byArea = new Map<string, { total: number; covered: number; launches: number }>();
-    for (const profile of placed) {
+    let coveredCount = 0;
+    for (const profile of priorityProfiles) {
       const key = profile.area?.trim() || "Unassigned";
       const current = byArea.get(key) ?? { total: 0, covered: 0, launches: 0 };
       current.total += 1;
       current.launches += profile.today_launch_count;
-      if (profile.launched_today) current.covered += 1;
+      if (profile.launched_today) {
+        current.covered += 1;
+        coveredCount += 1;
+      }
       byArea.set(key, current);
     }
-    return Array.from(byArea.entries()).sort(
-      (a, b) => b[1].covered - a[1].covered || b[1].total - a[1].total,
-    );
-  }, [placed]);
+    return {
+      coverage: Array.from(byArea.entries()).sort(
+        (a, b) => b[1].covered - a[1].covered || b[1].total - a[1].total,
+      ),
+      coveredToday: coveredCount,
+    };
+  }, [priorityProfiles]);
 
-  const coveredToday = placed.filter((profile) => profile.launched_today).length;
-  const missingToday = placed.length - coveredToday;
-  const fullRadiusCount = radiusMode === "all" ? placed.length : coveredToday;
+  const missingToday = priorityProfiles.length - coveredToday;
+  const fullRadiusCount =
+    radiusMode === "all" || radiusMode === "inactive" ? priorityProfiles.length : coveredToday;
   const scrollCoverage = (direction: -1 | 1) => {
     const node = coverageScrollerRef.current;
     if (!node) return;
@@ -163,12 +221,22 @@ function Inner() {
         <div className="flex flex-col 2xl:flex-row 2xl:items-center justify-between mb-4 gap-4">
           <div>
             <h3 className="text-sm font-semibold tracking-tight">
-              {radiusMode === "all" ? "Added account radius" : "Daily profile coverage"}
+              {radiusMode === "all"
+                ? "Added account radius"
+                : radiusMode === "first_daily"
+                  ? "1st Priority coverage today"
+                  : radiusMode === "second_daily"
+                    ? "2nd Priority coverage today"
+                    : "Daily profile coverage"}
             </h3>
             <div className="text-[11.5px] text-muted-foreground mt-0.5">
               {radiusMode === "all"
                 ? "Every added browser profile with coordinates shows a 50-mile radius."
-                : "Shows a 50-mile radius for profiles launched today. The daily window resets at midnight PKT."}
+                : radiusMode === "first_daily"
+                  ? "Shows 1st Priority profiles launched today. The daily window resets at midnight PKT."
+                  : radiusMode === "second_daily"
+                    ? "Shows 2nd Priority profiles launched today. The daily window resets at midnight PKT."
+                    : "Shows a 50-mile radius for profiles launched today. The daily window resets at midnight PKT."}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -178,8 +246,11 @@ function Inner() {
               className="max-w-full overflow-x-auto pb-1 -mb-1"
             >
               <TabsList className="h-9 w-max flex-shrink-0">
-                <TabsTrigger value="daily" className="h-7 text-[11.5px]">
-                  Today
+                <TabsTrigger value="first_daily" className="h-7 text-[11.5px]">
+                  1st Priority Today
+                </TabsTrigger>
+                <TabsTrigger value="second_daily" className="h-7 text-[11.5px]">
+                  2nd Priority Today
                 </TabsTrigger>
                 <TabsTrigger value="all" className="h-7 text-[11.5px]">
                   All profiles
@@ -256,7 +327,7 @@ function Inner() {
           )}
           {" · "}
           {fullRadiusCount} full 50-mile radii · {coveredToday} covered today · {missingToday}{" "}
-          missing · {placed.length} pinned profiles
+          missing · {priorityProfiles.length} profiles in this view
         </p>
       </div>
 

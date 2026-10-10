@@ -41,19 +41,23 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhone, phoneSearchPattern, phoneDigitsMatch } from "@/lib/crm-lite";
-import {
-  LeadForm,
-  uploadLeadImages,
-  type LeadFormValues,
-  type LeadReferenceMode,
-} from "@/components/lead-form";
+import { LeadForm, type LeadFormValues, type LeadReferenceMode } from "@/components/lead-form";
+import { uploadLeadImages } from "@/lib/lead-form-utils";
 import type { ForwardedStatus } from "@/lib/crm-types";
 import { STATUS_LABEL, STATUS_TONE } from "@/lib/lead-statuses";
 import { cn } from "@/lib/utils";
-import { confirmDiscardUnsaved } from "@/components/confirm-dialog";
+import { confirmDiscardUnsaved } from "@/components/confirm-dialog-store";
 import { LeadReminderDialog, type ReminderLeadInfo } from "@/components/lead-reminder-dialog";
 
 export const Route = createFileRoute("/app/forwarded-leads")({
+  head: () => ({ meta: [
+    { title: "Forwarded Leads \u00b7 JellyBean" },
+    { name: "description", content: "Track your forwarded leads and their customer outcomes." },
+    { property: "og:title", content: "Forwarded Leads \u00b7 JellyBean" },
+    { property: "og:description", content: "Track your forwarded leads and their customer outcomes." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,
@@ -84,6 +88,7 @@ type Row = {
   submitted_by_role: string | null;
   is_landline: boolean;
   assigned_to: string | null;
+  out_of_base: boolean;
 };
 
 const OUTCOME_FILTERS = [
@@ -94,6 +99,9 @@ const OUTCOME_FILTERS = [
   "service_provider_himself",
   "small_service",
   "converted",
+  "cx_interested",
+  "cx_not_interested",
+  "cx_didnt_replied",
   "need_follow_up",
 ] as const;
 
@@ -251,7 +259,7 @@ function Inner() {
       let q = supabase
         .from("qualified_leads")
         .select(
-          "id, customer_name, customer_number, customer_number_2, extra_numbers, service, context, post_text, pass_it_to, main_area, sub_area, original_lead_link, reference, is_important, pinned_important, is_landline, images, submitted_by_role, cs_status, assigned_at, assigned_by, assigned_to, updated_at, created_by",
+          "id, customer_name, customer_number, customer_number_2, extra_numbers, service, context, post_text, pass_it_to, main_area, sub_area, original_lead_link, reference, is_important, pinned_important, is_landline, images, submitted_by_role, cs_status, assigned_at, assigned_by, assigned_to, updated_at, created_by, out_of_base",
         )
         .order("updated_at", { ascending: false })
         .range(from, to);
@@ -668,7 +676,16 @@ function ForwardedTable({
         <tbody>
           {rows.map((r) => (
             <tr key={r.id} className="crm-data-row border-t border-border">
-              <td className="px-3 py-2 font-semibold text-foreground">{r.customer_name}</td>
+              <td className="px-3 py-2 font-semibold text-foreground">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span>{r.customer_name}</span>
+                  {r.out_of_base && (
+                    <span className="inline-flex items-center rounded-full bg-[#fde8d5] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#b4530a] ring-1 ring-[#f4c79a]">
+                      Out of Base
+                    </span>
+                  )}
+                </div>
+              </td>
               <td className="px-3 py-2">
                 <span className="inline-flex items-center gap-1.5 flex-wrap">
                   <a
@@ -766,7 +783,7 @@ function ForwardedTable({
                     disabled={r.cs_status === "converted"}
                     title={
                       r.cs_status === "converted"
-                        ? "Processed leads can't receive reminders"
+                        ? "Delivered leads can't receive reminders"
                         : r.assigned_to
                           ? "Send reminder to assigned CS"
                           : "Send reminder to all CS users"

@@ -45,6 +45,14 @@ import { isCsUser } from "@/lib/cs-filter";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/app/analytics")({
+  head: () => ({ meta: [
+    { title: "Analytics \u00b7 JellyBean" },
+    { name: "description", content: "Review JellyBean pipeline throughput and team performance." },
+    { property: "og:title", content: "Analytics \u00b7 JellyBean" },
+    { property: "og:description", content: "Review JellyBean pipeline throughput and team performance." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary" },
+  ] }),
   component: Page,
   pendingComponent: () => <RouteSkeleton />,
   pendingMs: 200,
@@ -71,6 +79,9 @@ const CS_STATUSES = [
   "service_provider_himself",
   "small_service",
   "converted",
+  "cx_interested",
+  "cx_not_interested",
+  "cx_didnt_replied",
   "need_follow_up",
 ] as const satisfies readonly CsStatus[];
 
@@ -82,7 +93,10 @@ const CS_LABELS: Record<string, string> = {
   already_got_someone: "Already got someone",
   service_provider_himself: "Service provider himself",
   small_service: "Small service",
-  converted: "Processed",
+  converted: "Delivered",
+  cx_interested: "CX interested",
+  cx_not_interested: "CX not interested",
+  cx_didnt_replied: "CX didn't replied",
   need_follow_up: "Need follow-up",
 };
 
@@ -239,10 +253,13 @@ function Inner({ isAdmin }: { isAdmin: boolean }) {
     placeholderData: keepPreviousData,
   });
 
-  const series = analytics.data?.series ?? [];
-  const prevSeries = analytics.data?.prevSeries ?? [];
-  const csBuckets = analytics.data?.csBuckets ?? [];
-  const forwarders = analytics.data?.forwarders ?? [];
+  // Wrapped so the identity is stable across renders; `?? []` alone allocates a
+  // fresh array every render, which defeats every downstream useMemo that
+  // depends on these.
+  const series = useMemo(() => analytics.data?.series ?? [], [analytics.data]);
+  const prevSeries = useMemo(() => analytics.data?.prevSeries ?? [], [analytics.data]);
+  const csBuckets = useMemo(() => analytics.data?.csBuckets ?? [], [analytics.data]);
+  const forwarders = useMemo(() => analytics.data?.forwarders ?? [], [analytics.data]);
 
   const totals = useMemo(() => {
     const t = { captured: 0, forwarded: 0, sentToCS: 0, wrong: 0 };
@@ -780,7 +797,7 @@ function SentToCsSection({
     placeholderData: keepPreviousData,
   });
 
-  const deptRows = deptLeadsQuery.data ?? [];
+  const deptRows = useMemo(() => deptLeadsQuery.data ?? [], [deptLeadsQuery.data]);
 
   // Totals by department for pills
   const deptCounts = useMemo(() => {
@@ -1247,7 +1264,7 @@ function DeptLeadsChart({ since, until }: { since: string; until: string }) {
     placeholderData: keepPreviousData,
   });
 
-  const rawRows = deptQuery.data ?? [];
+  const rawRows = useMemo(() => deptQuery.data ?? [], [deptQuery.data]);
 
   // Calculate department totals for pills
   const deptTotals = useMemo(() => {
